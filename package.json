@@ -1,0 +1,26 @@
+{
+  "name": "shop-keeper",
+  "version": "1.0.0",
+  "description": "A web app for businesses to keep manage their sales",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "concurrently \"node index.js\" \"cd frontend && npm run dev\"",
+    "build": "cd frontend && npm run build"
+  },
+  "author": "Mmaduabuchi Igwilo",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-session": "^1.18.1",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

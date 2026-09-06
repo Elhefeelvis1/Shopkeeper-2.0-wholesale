@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --bg-color: #f3f4f6;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+@media print {
+  #root {
+    display: none !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #receipt-container, #receipt-container * {
+    visibility: visible;
+  }
+  #receipt-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@keyframes draw-stroke {
+  0% { stroke-dashoffset: 100; }
+  50% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 100; }
+}
+
+.animate-draw-stroke {
+  stroke-dasharray: 100;
+  animation: draw-stroke 4s ease-in-out infinite;
+}

@@ -24,6 +24,7 @@ const LabelsPage = () => {
     { id: 'categories', label: 'Categories' },
     { id: 'suppliers', label: 'Suppliers' },
     { id: 'units', label: 'Units' },
+    { id: 'wholesale_units', label: 'Wholesale Units' },
     { id: 'companies', label: 'Companies' }
   ];
 

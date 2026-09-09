@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Search, Plus, Trash2, ShoppingBag, CreditCard, User, Building, StickyNote } from 'lucide-react';
+import { Search, Plus, Trash2, ShoppingBag, CreditCard, User, Building, StickyNote, History } from 'lucide-react';
 import AddCustomerModal from '../components/AddCustomerModal';
 import Receipt from '../components/Receipt';
 import ProductSearch from '../components/ProductSearch';
+import PreviousSalesModal from '../components/PreviousSalesModal';
 import { useToast } from '../context/ToastContext';
 import { db, decrementLocalStock, queueSale } from '../db/dexieDb';
 import { pullMasterData, pushPendingSales } from '../services/syncService';
@@ -17,6 +18,7 @@ const SalesPage = () => {
   const [required, setRequired] = useState(false);
   const [shopDetails, setShopDetails] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
+  const [isPreviousSalesOpen, setIsPreviousSalesOpen] = useState(false);
   const { user } = useOutletContext() || {};
 
   const formatMoney = (amount) => {
@@ -298,6 +300,20 @@ const SalesPage = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Point of Sale</h1>
           <p className="text-sm text-gray-500 mt-0.5">Offline-first checkout and instant receipt generation.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!navigator.onLine) {
+              showToast('error', 'Cannot connect to server while offline. Previous sales require a network connection.');
+            }
+            setIsPreviousSalesOpen(true);
+          }}
+          className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-semibold transition shadow-xs active:scale-95 cursor-pointer"
+          title="View previous sales records"
+        >
+          <History size={16} className="text-indigo-600" />
+          <span>Previous Sales</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -467,12 +483,14 @@ const SalesPage = () => {
 
         {/* Right Column: Cart & Items */}
         <div className="lg:col-span-6 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[360px] lg:h-[calc(100vh-140px)]">
-          <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-2">
-            <ShoppingBag size={20} className="text-indigo-500" />
-            <h2 className="text-lg font-bold text-gray-800">Current Order</h2>
-            <span className="ml-auto bg-indigo-100 text-indigo-700 py-1 px-3 rounded-full text-sm font-semibold">
-              {cart.length} item{cart.length === 1 ? '' : 's'}
-            </span>
+          <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-wrap gap-2 justify-between items-center bg-gray-50/30">
+            <div className="flex items-center gap-2">
+              <ShoppingBag size={20} className="text-indigo-500" />
+              <h2 className="text-lg font-bold text-gray-800">Current Order</h2>
+              <span className="bg-indigo-100 text-indigo-700 py-0.5 px-2.5 rounded-full text-xs font-semibold">
+                {cart.length} {cart.length === 1 ? 'item' : 'items'}
+              </span>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50">
@@ -618,6 +636,14 @@ const SalesPage = () => {
       )}
 
       <Receipt receiptData={receiptData} />
+
+      {/* Previous Sales Modal */}
+      <PreviousSalesModal
+        isOpen={isPreviousSalesOpen}
+        onClose={() => setIsPreviousSalesOpen(false)}
+        shopDetails={shopDetails}
+        user={user}
+      />
     </div>
   );
 };

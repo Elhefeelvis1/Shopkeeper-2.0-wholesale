@@ -8,7 +8,8 @@ export default async function logStockTransaction(client, {
     userId, 
     saleId = null,
     purchaseId = null,
-    lotId = null 
+    lotId = null,
+    wholesaleId = null
 }) {
     const queryText = `
         INSERT INTO stock_changes (
@@ -21,8 +22,9 @@ export default async function logStockTransaction(client, {
             user_id,
             sale_id,
             purchase_id,
-            lot_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            lot_id,
+            wholesale_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id;
     `;
 
@@ -36,7 +38,8 @@ export default async function logStockTransaction(client, {
         userId,
         saleId,
         purchaseId,
-        lotId
+        lotId,
+        wholesaleId
     ];
 
     try {

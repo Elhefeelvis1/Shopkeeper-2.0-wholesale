@@ -185,6 +185,42 @@ export async function pushPendingSales() {
 }
 
 /**
+ * Push pending wholesale sales queue to server
+ */
+export async function pushPendingWholesales() {
+  let uploadedWholesalesCount = 0;
+  const pendingWholesales = await db.wholesaleQueue.filter(s => s.status === 'pending').sortBy('id');
+
+  for (const item of pendingWholesales) {
+    try {
+      const res = await axios.post('/api/process-wholesale', item.payload);
+      if (res.data && res.data.success) {
+        // Successfully processed on server, remove from queue
+        await db.wholesaleQueue.delete(item.id);
+        uploadedWholesalesCount++;
+      } else {
+        await db.wholesaleQueue.update(item.id, {
+          sync_attempts: (item.sync_attempts || 0) + 1,
+          error_message: res.data?.message || 'Server rejected wholesale'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to sync wholesale id', item.id, err);
+      await db.wholesaleQueue.update(item.id, {
+        sync_attempts: (item.sync_attempts || 0) + 1,
+        error_message: err.response?.data?.message || err.message
+      });
+      // Break on fatal network failure to prevent repeating on bad connection
+      if (!err.response) {
+        break;
+      }
+    }
+  }
+
+  return uploadedWholesalesCount;
+}
+
+/**
  * Run full synchronization: Push local changes then Pull latest master data
  */
 export async function syncAll(options = {}) {
@@ -203,6 +239,7 @@ export async function syncAll(options = {}) {
     // 1. Push local changes first
     const syncedCustomers = await pushPendingCustomers();
     const uploadedSales = await pushPendingSales();
+    const uploadedWholesales = await pushPendingWholesales();
 
     // 2. Pull fresh data from server
     const pullStats = await pullMasterData();
@@ -210,6 +247,7 @@ export async function syncAll(options = {}) {
     const result = {
       success: true,
       uploadedSales,
+      uploadedWholesales,
       syncedCustomers,
       productCount: pullStats.productCount,
       timestamp: new Date()

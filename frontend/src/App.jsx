@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 
 import SalesPage from './pages/SalesPage';
+import WholesalePage from './pages/WholesalePage';
 import StockPage from './pages/StockPage';
 import TransactionsPage from './pages/TransactionsPage';
 import PurchasesPage from './pages/PurchasesPage';
@@ -33,6 +34,7 @@ function AppContent() {
             <Route path="/home" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/sales" element={<SalesPage />} />
+            <Route path="/wholesale" element={<WholesalePage />} />
             <Route path="/stock" element={<StockPage />} />
             <Route path="/purchases" element={<PurchasesPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />

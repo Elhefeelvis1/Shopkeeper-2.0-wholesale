@@ -1,10 +1,10 @@
 import { useState, useContext, useEffect } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { UserContext } from '../context/UserContext';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import {
   LayoutDashboard, Package, Users, FileText, LogOut, RefreshCw,
-  Wrench, History, ChevronLeft, ChevronRight, Settings, UserCog, Locate, ChartNoAxesCombined, Home, Menu, X, ClipboardCheck, Wifi, WifiOff, CheckCircle2
+  Wrench, History, ChevronLeft, ChevronRight, Settings, UserCog, Locate, ChartNoAxesCombined, Home, Menu, X, ClipboardCheck, Wifi, WifiOff, CheckCircle2, Sun, Moon
 } from 'lucide-react';
 
 const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }) => {
@@ -73,12 +73,11 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
             key="home"
             to="/home"
             title={isCollapsed ? "Home" : undefined}
-            className={`flex items-center gap-3 py-3 rounded-lg transition-colors ${
-              isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
-            } ${location.pathname === "/home"
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-            }`}
+            className={`flex items-center gap-3 py-3 rounded-lg transition-colors ${isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
+              } ${location.pathname === "/home"
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
           >
             <div className="flex-shrink-0"><Home size={20} /></div>
             <span className={`font-medium whitespace-nowrap ${isCollapsed ? 'md:hidden' : ''}`}>Home</span>
@@ -86,18 +85,17 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
 
           {navItems.filter(item => {
             if (user?.role === 'administrator') return true;
-            return item.path === '/sales' || item.path === '/purchases';
+            return item.path === '/sales' || item.path === '/purchases' || item.path === '/wholesale';
           }).map((item) => (
             <Link
               key={item.name}
               to={item.path}
               title={isCollapsed ? item.name : undefined}
-              className={`flex items-center gap-3 py-3 rounded-lg transition-colors ${
-                isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
-              } ${location.pathname === item.path
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
+              className={`flex items-center gap-3 py-3 rounded-lg transition-colors ${isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
+                } ${location.pathname === item.path
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                }`}
             >
               <div className="shrink-0">{item.icon}</div>
               <span className={`font-medium whitespace-nowrap ${isCollapsed ? 'md:hidden' : ''}`}>{item.name}</span>
@@ -108,12 +106,11 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
             key="account-settings"
             to="/account-settings"
             title={isCollapsed ? "Account Settings" : undefined}
-            className={`flex items-center gap-3 py-3 rounded-lg transition-colors ${
-              isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
-            } ${location.pathname === "/account-settings"
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-            }`}
+            className={`flex items-center gap-3 py-3 rounded-lg transition-colors ${isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
+              } ${location.pathname === "/account-settings"
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
           >
             <div className="flex-shrink-0"><Settings size={20} /></div>
             <span className={`font-medium whitespace-nowrap ${isCollapsed ? 'md:hidden' : ''}`}>Account Settings</span>
@@ -121,9 +118,8 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
 
           <button
             onClick={logout}
-            className={`w-full flex items-center gap-3 py-3 mt-4 rounded-lg transition-colors bg-red-500 hover:bg-red-600 text-white shadow-md cursor-pointer ${
-              isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
-            }`}
+            className={`w-full flex items-center gap-3 py-3 mt-4 rounded-lg transition-colors bg-red-500 hover:bg-red-600 text-white shadow-md cursor-pointer ${isCollapsed ? 'md:px-0 md:justify-center px-4' : 'px-4'
+              }`}
           >
             <div className="flex-shrink-0"><LogOut size={20} /></div>
             <span className={`font-medium whitespace-nowrap ${isCollapsed ? 'md:hidden' : ''}`}>Logout</span>
@@ -137,14 +133,13 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
 const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useContext(UserContext);
+  const { logout, theme, changeTheme } = useContext(UserContext);
   const { isOnline, isSyncing, pendingSalesCount, triggerSync } = useNetworkStatus();
 
   return (
     <header
-      className={`h-16 bg-white/95 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 shadow-xs fixed top-0 right-0 z-20 transition-all duration-300 ${
-        showSidebar ? (isCollapsed ? 'left-0 md:left-20' : 'left-0 md:left-64') : 'left-0'
-      }`}
+      className={`h-16 bg-white/95 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 shadow-xs fixed top-0 right-0 z-20 transition-all duration-300 ${showSidebar ? (isCollapsed ? 'left-0 md:left-20' : 'left-0 md:left-64') : 'left-0'
+        }`}
     >
       <div className="flex items-center gap-3 sm:gap-6">
         {showSidebar && (
@@ -156,7 +151,13 @@ const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
             <Menu size={22} />
           </button>
         )}
-        <Link to="/home" className="text-lg sm:text-xl font-bold text-gray-800 truncate">ShopKeeper</Link>
+        {location.pathname === '/wholesale' ? (
+          <div className="flex items-center gap-2 select-none">
+            <span className="text-lg sm:text-xl font-bold text-gray-800 tracking-tight">ShopKeeper</span>
+          </div>
+        ) : (
+          <Link to="/home" className="text-lg sm:text-xl font-bold text-gray-800 truncate">ShopKeeper</Link>
+        )}
         {user?.role === "administrator" && (location.pathname === '/sales' || location.pathname === '/purchases') && (
           <button
             onClick={() => navigate('/dashboard')}
@@ -167,11 +168,25 @@ const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
         )}
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Quick Theme Toggle Button */}
+        <button
+          type="button"
+          onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition cursor-pointer"
+          title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+          aria-label="Toggle Theme"
+        >
+          {theme === 'dark' ? (
+            <Sun size={18} className="text-amber-400" />
+          ) : (
+            <Moon size={18} className="text-indigo-600" />
+          )}
+        </button>
+
         {/* Network & Sync Badge */}
         <div
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-            isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}
           title={isOnline ? 'Connected to server' : 'Operating offline'}
         >
           {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
@@ -236,9 +251,14 @@ const Layout = () => {
     );
   }
 
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   const isSales = location.pathname === '/sales';
   const isPurchase = location.pathname === '/purchases';
-  const showSidebar = !isSales && !isPurchase;
+  const isWholesale = location.pathname === '/wholesale';
+  const showSidebar = !isSales && !isPurchase && !isWholesale;
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -253,9 +273,8 @@ const Layout = () => {
       )}
 
       <div
-        className={`flex-1 flex flex-col min-h-screen min-w-0 overflow-hidden transition-all duration-300 ${
-          showSidebar ? (isCollapsed ? 'md:pl-20' : 'md:pl-64') : ''
-        }`}
+        className={`flex-1 flex flex-col min-h-screen min-w-0 overflow-hidden transition-all duration-300 ${showSidebar ? (isCollapsed ? 'md:pl-20' : 'md:pl-64') : ''
+          }`}
       >
         <Navbar
           user={user}

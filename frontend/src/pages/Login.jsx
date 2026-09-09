@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ShieldCheck, LogIn, Wifi, WifiOff } from 'lucide-react';
 import { UserContext } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
@@ -12,7 +12,11 @@ const Login = () => {
   const { login } = useContext(UserContext);
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  // Determine redirect destination if previously attempted (e.g. /wholesale)
+  const from = location.state?.from?.pathname || location.state?.from || '/sales';
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -27,7 +31,7 @@ const Login = () => {
         } else {
           showToast('success', 'Logged in successfully!');
         }
-        navigate('/sales');
+        navigate(from === '/login' ? '/sales' : from, { replace: true });
       } else {
         setError(result.message || 'Login failed. Please check your credentials.');
       }
@@ -51,9 +55,8 @@ const Login = () => {
           Sign in to ShopKeeper POS
         </h2>
         <div className="mt-2 flex justify-center">
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-            isOnline ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-          }`}>
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${isOnline ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+            }`}>
             {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
             {isOnline ? 'Online Ready' : 'Offline Mode Active'}
           </span>
@@ -111,7 +114,7 @@ const Login = () => {
         </div>
       </div>
       <div className="mt-8 text-center">
-        <p className="text-slate-500 text-xs sm:text-sm font-semibold font-mono">-- ShopKeeper Offline-First POS --</p>
+        <p className="text-slate-500 text-xs sm:text-sm font-semibold font-mono">-- Developed By ELVIS 07049476348 / 08137328131 --</p>
       </div>
     </div>
   );

@@ -18,6 +18,8 @@ import * as userAuth from "./imports/login_register.js";
 import * as addEdit from "./imports/add_edit_labels.js";
 // Importing add/edit labels functions
 import * as sales from "./imports/salesLogic.js";
+// Importing wholesaleLogic functions
+import * as wholesale from "./imports/wholesaleLogic.js";
 // Importing checkTransaction function
 import checkTransaction from './imports/checkTransaction.js';
 // importing addPurchase function
@@ -145,6 +147,22 @@ app.post('/api/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
+// Update User Theme Preference
+app.post('/api/change-theme', isAuthenticated, async (req, res) => {
+    const { theme } = req.body;
+    if (!theme || !['light', 'dark'].includes(theme)) {
+        return res.status(400).json({ success: false, message: "Valid theme ('light' or 'dark') is required." });
+    }
+    try {
+        await db.query("UPDATE users SET theme = $1 WHERE id = $2", [theme, req.user.id]);
+        req.user.theme = theme;
+        res.json({ success: true, theme, message: "Theme preference saved successfully." });
+    } catch (err) {
+        console.error("Change theme error:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get("/api/salesPage", isAuthenticated, async (req, res) => {
     try {
         const categories = await db.query('SELECT name FROM categories');
@@ -181,13 +199,19 @@ app.get("/api/sync/master-data", isAuthenticated, async (req, res) => {
                 ast.id AS item_id, 
                 ast.name AS item_name, 
                 ast.barcode, 
+                ast.generic_name,
                 ast.unit_selling_price, 
+                ast.wholesale_price,
+                ast.wholesale_unit_id,
+                wu.name AS wholesale_unit,
+                COALESCE(ast.wholesale_multiplier, 1) AS wholesale_multiplier,
                 ast.total_quantity_in_stock, 
                 ast.last_cost_price, 
                 categories.name AS category_name, 
                 units.name AS unit_name 
             FROM all_stocks ast 
             LEFT JOIN units ON ast.unit_id = units.id 
+            LEFT JOIN wholesale_units wu ON ast.wholesale_unit_id = wu.id
             LEFT JOIN categories ON ast.category_id = categories.id
             ORDER BY ast.name ASC
         `;
@@ -244,12 +268,14 @@ app.get("/api/dashboard", isAdmin, async (req, res) => {
 // Stock Page
 app.get("/api/stockPage", isAdmin, async (req, res) => {
     try {
-        const categories = await db.query('SELECT name FROM categories');
-        const units = await db.query('SELECT name FROM units');
-        const companies = await db.query('SELECT name FROM companies');
+        const categories = await db.query('SELECT name FROM categories ORDER BY name ASC');
+        const units = await db.query('SELECT name FROM units ORDER BY name ASC');
+        const wholesaleUnits = await db.query('SELECT name FROM wholesale_units ORDER BY name ASC');
+        const companies = await db.query('SELECT name FROM companies ORDER BY name ASC');
         res.json({
             categories: categories.rows,
             units: units.rows,
+            wholesaleUnits: wholesaleUnits.rows,
             companies: companies.rows,
         });
     } catch (err) {
@@ -770,6 +796,10 @@ app.get("/api/all-inventory", isAdmin, async (req, res) => {
                 ast.generic_name,
                 ast.last_cost_price,
                 ast.unit_selling_price,
+                ast.wholesale_price,
+                ast.wholesale_unit_id,
+                wu.name AS wholesale_unit,
+                COALESCE(ast.wholesale_multiplier, 1) AS wholesale_multiplier,
                 units.name AS unit,
                 ctg.name AS category,
                 cmp.name AS company,
@@ -780,6 +810,7 @@ app.get("/api/all-inventory", isAdmin, async (req, res) => {
                 ast.last_updated_date
             FROM all_stocks ast
             LEFT JOIN units ON ast.unit_id = units.id
+            LEFT JOIN wholesale_units wu ON ast.wholesale_unit_id = wu.id
             LEFT JOIN categories ctg ON ast.category_id = ctg.id
             LEFT JOIN companies cmp ON ast.company_id = cmp.id
             ${whereClause}
@@ -834,7 +865,12 @@ app.delete("/api/delete-item/:id", isAdmin, async (req, res) => {
 
 // Add Stock Item
 app.post("/api/addStock", isAdmin, async (req, res) => {
-    const { name, genericName, barcode, category, company, unit, cost, price, reorderLevel, description, quantity } = req.body;
+    const { 
+        name, genericName, barcode, category, company, unit, cost, price, 
+        reorderLevel, description, quantity,
+        wholesalePrice, wholesaleUnit, wholesaleMultiplier,
+        wholesale_price, wholesale_unit, wholesale_multiplier
+    } = req.body;
     try {
         const nameCheck = await db.query('SELECT id FROM all_stocks WHERE name = $1', [name]);
         if (nameCheck.rows.length > 0) {
@@ -853,10 +889,25 @@ app.post("/api/addStock", isAdmin, async (req, res) => {
         const initialQuantity = Number(quantity) > 0 ? Number(quantity) : 0;
         const userId = req.user?.id || req.session?.passport?.user || 1;
 
+        const effectiveWholesalePrice = parseFloat(wholesalePrice ?? wholesale_price ?? 0) || 0;
+        const rawWholesaleUnit = (wholesaleUnit ?? wholesale_unit ?? '').toString().trim();
+        const effectiveWholesaleMultiplier = parseInt(wholesaleMultiplier ?? wholesale_multiplier ?? 1, 10) || 1;
+
+        let wholesaleUnitId = null;
+        if (rawWholesaleUnit) {
+            const wuRes = await db.query('SELECT id FROM wholesale_units WHERE name = $1', [rawWholesaleUnit]);
+            if (wuRes.rows.length > 0) {
+                wholesaleUnitId = wuRes.rows[0].id;
+            } else {
+                const newWu = await db.query('INSERT INTO wholesale_units (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id', [rawWholesaleUnit]);
+                wholesaleUnitId = newWu.rows[0].id;
+            }
+        }
+
         const insertQuery = `
             INSERT INTO all_stocks 
-            (name, generic_name, barcode, category_id, unit_id, company_id, last_cost_price, unit_selling_price, reorder_level, description, user_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            (name, generic_name, barcode, category_id, unit_id, company_id, last_cost_price, unit_selling_price, reorder_level, description, user_id, wholesale_price, wholesale_unit_id, wholesale_multiplier)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *;
         `;
         const values = [
@@ -870,7 +921,10 @@ app.post("/api/addStock", isAdmin, async (req, res) => {
             price || 0,
             reorderLevel || 0,
             description || null,
-            userId
+            userId,
+            effectiveWholesalePrice,
+            wholesaleUnitId,
+            effectiveWholesaleMultiplier
         ];
 
         const result = await db.query(insertQuery, values);
@@ -895,7 +949,12 @@ app.post("/api/addStock", isAdmin, async (req, res) => {
 
 // Update Stock Item
 app.put("/api/update-item", isAdmin, async (req, res) => {
-    const { id, name, genericName, barcode, category, company, unit, cost, price, reorderLevel, description, quantity } = req.body;
+    const { 
+        id, name, genericName, barcode, category, company, unit, cost, price, 
+        reorderLevel, description, quantity,
+        wholesalePrice, wholesaleUnit, wholesaleMultiplier,
+        wholesale_price, wholesale_unit, wholesale_multiplier
+    } = req.body;
     try {
         const catRes = await db.query('SELECT id FROM categories WHERE name = $1', [category]);
         const categoryId = catRes.rows.length > 0 ? catRes.rows[0].id : null;
@@ -906,12 +965,28 @@ app.put("/api/update-item", isAdmin, async (req, res) => {
         const compRes = await db.query('SELECT id FROM companies WHERE name = $1', [company]);
         const companyId = compRes.rows.length > 0 ? compRes.rows[0].id : null;
 
+        const effectiveWholesalePrice = parseFloat(wholesalePrice ?? wholesale_price ?? 0) || 0;
+        const rawWholesaleUnit = (wholesaleUnit ?? wholesale_unit ?? '').toString().trim();
+        const effectiveWholesaleMultiplier = parseInt(wholesaleMultiplier ?? wholesale_multiplier ?? 1, 10) || 1;
+
+        let wholesaleUnitId = null;
+        if (rawWholesaleUnit) {
+            const wuRes = await db.query('SELECT id FROM wholesale_units WHERE name = $1', [rawWholesaleUnit]);
+            if (wuRes.rows.length > 0) {
+                wholesaleUnitId = wuRes.rows[0].id;
+            } else {
+                const newWu = await db.query('INSERT INTO wholesale_units (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id', [rawWholesaleUnit]);
+                wholesaleUnitId = newWu.rows[0].id;
+            }
+        }
+
         const updateQuery = `
             UPDATE all_stocks 
             SET name = $1, generic_name = $2, barcode = $3, category_id = $4, unit_id = $5, company_id = $6, 
                 last_cost_price = $7, unit_selling_price = $8, reorder_level = $9, description = $10,
+                wholesale_price = $11, wholesale_unit_id = $12, wholesale_multiplier = $13,
                 last_updated_date = CURRENT_TIMESTAMP
-            WHERE id = $11
+            WHERE id = $14
             RETURNING *;
         `;
         const values = [
@@ -925,6 +1000,9 @@ app.put("/api/update-item", isAdmin, async (req, res) => {
             price || 0,
             reorderLevel || 0,
             description || null,
+            effectiveWholesalePrice,
+            wholesaleUnitId,
+            effectiveWholesaleMultiplier,
             id
         ];
 
@@ -1065,6 +1143,34 @@ app.post("/api/process-sale", isAuthenticated, async (req, res) => {
     }
 });
 
+// Save Wholesale
+app.post("/api/process-wholesale", isAuthenticated, async (req, res) => {
+    const userId = req.user ? req.user.id : 1;
+    const wholesaleData = req.body;
+    try {
+        const newWholesale = await wholesale.saveWholesale(userId, wholesaleData, db, res);
+        if (newWholesale && newWholesale.wholesaleId) {
+            res.status(201).json({
+                success: true,
+                message: `Wholesale successfully processed!`,
+                contents: newWholesale
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                message: "Wholesale could not be saved. Invalid data or internal issue.",
+                contents: {}
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: `Failed to process wholesale: ${err.message}`,
+            error: err.message
+        });
+    }
+});
+
 // ********Transaction checking
 app.post("/api/searchTransactions", isAdmin, async (req, res) => {
     const { startDate, endDate, transactionType, userId } = req.body;
@@ -1187,6 +1293,7 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
             return res.json({ success: true, sales: [] });
         }
 
+        const isAdminUser = req.user && req.user.role === 'administrator';
         const saleIds = salesResult.rows.map(r => r.sale_id);
         const lineItemsQuery = `
             SELECT 
@@ -1195,8 +1302,8 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
                 sli.product_id,
                 ast.name AS product_name,
                 sli.quantity_sold,
-                sli.selling_price_per_unit,
-                sli.cost_at_sale
+                sli.selling_price_per_unit
+                ${isAdminUser ? ', sli.cost_at_sale' : ''}
             FROM sale_line_items sli
             JOIN all_stocks ast ON sli.product_id = ast.id
             WHERE sli.sale_id = ANY($1::int[])
@@ -1220,6 +1327,107 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
         res.json({ success: true, sales });
     } catch (err) {
         console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Previous Wholesales
+app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
+    const { startDate, endDate, customerId, userId } = req.body;
+    try {
+        const queryParts = [];
+        const params = [];
+        let paramCounter = 1;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: "Start date and End date are required." });
+        }
+
+        queryParts.push(`w.wholesale_date >= $${paramCounter}::date`);
+        params.push(startDate);
+        paramCounter++;
+
+        queryParts.push(`w.wholesale_date < ($${paramCounter}::date + interval '1 day')`);
+        params.push(endDate);
+        paramCounter++;
+
+        if (customerId && parseInt(customerId, 10) > 0) {
+            queryParts.push(`w.customer_id = $${paramCounter}`);
+            params.push(parseInt(customerId, 10));
+            paramCounter++;
+        }
+
+        if (userId && parseInt(userId, 10) > 0) {
+            queryParts.push(`w.user_id = $${paramCounter}`);
+            params.push(parseInt(userId, 10));
+            paramCounter++;
+        }
+
+        const wholesaleQuery = `
+            SELECT 
+                w.id AS wholesale_id,
+                w.wholesale_date,
+                w.total_amount,
+                w.discount_applied,
+                w.pay_route,
+                w.customer_id,
+                c.name AS customer_name,
+                w.user_id,
+                u.username AS cashier_name,
+                w.bank_id,
+                b.bank_name
+            FROM wholesales w
+            LEFT JOIN customers c ON w.customer_id = c.id
+            LEFT JOIN users u ON w.user_id = u.id
+            LEFT JOIN banks b ON w.bank_id = b.id
+            WHERE ${queryParts.join(' AND ')}
+            ORDER BY w.wholesale_date DESC
+        `;
+        const wholesaleResult = await db.query(wholesaleQuery, params);
+
+        if (wholesaleResult.rows.length === 0) {
+            return res.json({ success: true, wholesales: [] });
+        }
+
+        const isAdminUser = req.user && req.user.role === 'administrator';
+        const wholesaleIds = wholesaleResult.rows.map(r => r.wholesale_id);
+        const lineItemsQuery = `
+            SELECT 
+                wli.id AS line_item_id,
+                wli.wholesale_id,
+                wli.product_id,
+                ast.name AS product_name,
+                wli.quantity_sold,
+                wli.wholesale_unit_id,
+                COALESCE(wu.name, 'Pack') AS wholesale_unit_name,
+                wli.unit_multiplier,
+                wli.total_base_units,
+                wli.selling_price_per_unit
+                ${isAdminUser ? ', wli.cost_at_sale' : ''}
+            FROM wholesale_line_items wli
+            JOIN all_stocks ast ON wli.product_id = ast.id
+            LEFT JOIN wholesale_units wu ON wli.wholesale_unit_id = wu.id
+            WHERE wli.wholesale_id = ANY($1::int[])
+            ORDER BY wli.id ASC
+        `;
+        const lineItemsResult = await db.query(lineItemsQuery, [wholesaleIds]);
+
+        const itemsByWholesaleId = {};
+        lineItemsResult.rows.forEach(item => {
+            if (!itemsByWholesaleId[item.wholesale_id]) {
+                itemsByWholesaleId[item.wholesale_id] = [];
+            }
+            itemsByWholesaleId[item.wholesale_id].push(item);
+        });
+
+        const wholesales = wholesaleResult.rows.map(w => ({
+            ...w,
+            items: itemsByWholesaleId[w.wholesale_id] || []
+        }));
+
+        res.json({ success: true, wholesales });
+    } catch (err) {
+        console.error('Previous wholesales error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -1509,7 +1717,7 @@ app.post("/api/addNewCustomer", isAuthenticated, async (req, res) => {
 
 // Label routes (Admin Only)
 app.get('/api/labels/:type', isAdmin, async (req, res) => {
-    const validTables = ['suppliers', 'categories', 'units', 'companies'];
+    const validTables = ['suppliers', 'categories', 'units', 'wholesale_units', 'companies'];
     const tableName = req.params.type;
 
     if (!validTables.includes(tableName)) {
@@ -1525,7 +1733,7 @@ app.get('/api/labels/:type', isAdmin, async (req, res) => {
 });
 
 app.post('/api/labels/:type', isAdmin, async (req, res) => {
-    const validTables = ['suppliers', 'categories', 'units', 'companies'];
+    const validTables = ['suppliers', 'categories', 'units', 'wholesale_units', 'companies'];
     const tableName = req.params.type;
     const { name } = req.body;
 
@@ -1541,7 +1749,7 @@ app.post('/api/labels/:type', isAdmin, async (req, res) => {
 });
 
 app.put('/api/labels/:type/:id', isAdmin, async (req, res) => {
-    const validTables = ['suppliers', 'categories', 'units', 'companies'];
+    const validTables = ['suppliers', 'categories', 'units', 'wholesale_units', 'companies'];
     const tableName = req.params.type;
     const id = parseInt(req.params.id, 10);
     const { name } = req.body;
@@ -1559,7 +1767,7 @@ app.put('/api/labels/:type/:id', isAdmin, async (req, res) => {
 });
 
 app.delete('/api/labels/:type/:id', isAdmin, async (req, res) => {
-    const validTables = ['suppliers', 'categories', 'units', 'companies'];
+    const validTables = ['suppliers', 'categories', 'units', 'wholesale_units', 'companies'];
     const tableName = req.params.type;
     const id = parseInt(req.params.id, 10);
 
@@ -1666,11 +1874,12 @@ app.get('/api/schema/:tableName', isAuthenticated, async (req, res) => {
         if (tableName === 'all_stocks') {
             // Remove raw ID columns so they are not mapped directly (replaced with string equivalents)
             columns = columns.filter(col =>
-                !['unit_id', 'category_id', 'company_id', 'total_quantity_in_stock'].includes(col.column_name)
+                !['unit_id', 'wholesale_unit_id', 'category_id', 'company_id', 'total_quantity_in_stock'].includes(col.column_name)
             );
 
             // Add virtual string columns for foreign keys
             columns.push({ column_name: 'unit', data_type: 'text', is_nullable: 'NO' });
+            columns.push({ column_name: 'wholesale_unit', data_type: 'text', is_nullable: 'YES' });
             columns.push({ column_name: 'category', data_type: 'text', is_nullable: 'YES' });
             columns.push({ column_name: 'company', data_type: 'text', is_nullable: 'YES' });
 

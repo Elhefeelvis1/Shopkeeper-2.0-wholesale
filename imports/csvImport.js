@@ -1,4 +1,4 @@
-export const allowedTables = ['all_stocks', 'customers', 'suppliers', 'categories', 'units', 'companies'];
+export const allowedTables = ['all_stocks', 'customers', 'suppliers', 'categories', 'units', 'wholesale_units', 'companies'];
 
 export const importGenericCsv = async (req, res, db) => {
     try {
@@ -185,13 +185,29 @@ export const importStocksCsv = async (req, res, db) => {
                 companyId = 0; // Unknown Company default
             }
 
+            // Resolve Wholesale Unit ID
+            let wholesaleUnitId = null;
+            const wuCol = mappings['wholesale_unit'];
+            if (wuCol && row[wuCol]) {
+                const wuName = String(row[wuCol]).trim();
+                if (wuName) {
+                    const wuRes = await db.query('SELECT id FROM wholesale_units WHERE name = $1', [wuName]);
+                    if (wuRes.rows.length > 0) {
+                        wholesaleUnitId = wuRes.rows[0].id;
+                    } else {
+                        const newWu = await db.query('INSERT INTO wholesale_units (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id', [wuName]);
+                        wholesaleUnitId = newWu.rows[0].id;
+                    }
+                }
+            }
+
             // Build all_stocks insert
-            const stockCols = ['unit_id', 'category_id', 'company_id', 'user_id'];
-            const stockVals = [unitId, categoryId, companyId, userId];
+            const stockCols = ['unit_id', 'category_id', 'company_id', 'user_id', 'wholesale_unit_id'];
+            const stockVals = [unitId, categoryId, companyId, userId, wholesaleUnitId];
             
             for (const [dbCol, csvCol] of Object.entries(mappings)) {
                 // Ignore virtual columns and overridden IDs
-                if (['unit', 'category', 'company', 'quantity', 'cost_per_unit', 'expiry_date', 'unit_id', 'category_id', 'company_id', 'user_id'].includes(dbCol)) {
+                if (['unit', 'wholesale_unit', 'category', 'company', 'quantity', 'cost_per_unit', 'expiry_date', 'unit_id', 'wholesale_unit_id', 'category_id', 'company_id', 'user_id'].includes(dbCol)) {
                     continue;
                 }
                 

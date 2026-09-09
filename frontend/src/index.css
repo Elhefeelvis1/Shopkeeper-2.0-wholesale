@@ -3,17 +3,145 @@
 :root {
   --primary: #4f46e5;
   --primary-hover: #4338ca;
-  --bg-color: #f3f4f6;
-  --text-main: #111827;
-  --text-muted: #6b7280;
+  --bg-color: #f8fafc;
+  --card-bg: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  color-scheme: light;
+}
+
+html.dark {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --bg-color: #0b0f19;
+  --card-bg: #131b2e;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #1e293b;
+  color-scheme: dark;
 }
 
 body {
   background-color: var(--bg-color);
   color: var(--text-main);
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* -------------------------------------------------------------
+   Global Dark Mode Polish & Component Overrides
+------------------------------------------------------------- */
+
+html.dark body {
+  background-color: #0b0f19;
+  color: #f8fafc;
+}
+
+/* Dark mode cards & containers */
+html.dark .bg-white {
+  background-color: #131b2e !important;
+  color: #f8fafc;
+}
+
+html.dark .bg-gray-50,
+html.dark .bg-gray-50\/50,
+html.dark .bg-gray-50\/40,
+html.dark .bg-gray-50\/30,
+html.dark .bg-gray-50\/20,
+html.dark .bg-gray-100,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #0e1526 !important;
+}
+
+/* Dark mode text colors */
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-gray-600,
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* Dark mode borders */
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300,
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #1e293b !important;
+}
+
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+/* Dark mode form elements */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0b0f19 !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #6366f1 !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Dark mode table & row hovers */
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #1a243a !important;
+}
+
+/* Dark mode Header / Navbar */
+html.dark header {
+  background-color: rgba(19, 27, 46, 0.95) !important;
+  border-bottom-color: #1e293b !important;
+}
+
+html.dark header span,
+html.dark header a,
+html.dark header h1,
+html.dark header h2 {
+  color: #f8fafc !important;
+}
+
+/* Dark mode modals background backdrop */
+html.dark .bg-slate-900\/60,
+html.dark .bg-black\/50 {
+  background-color: rgba(3, 7, 18, 0.75) !important;
+}
+
+/* Print Styles */
 @media print {
   #root {
     display: none !important;

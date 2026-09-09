@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Edit, FileText, Barcode, Tag, Scale, DollarSign, Percent, AlertCircle, Building } from 'lucide-react';
+import { Package, Edit, FileText, Barcode, Tag, Scale, DollarSign, Percent, AlertCircle, Building, Boxes } from 'lucide-react';
 
 const StockItemModal = ({
   isOpen,
@@ -9,6 +9,7 @@ const StockItemModal = ({
   setFormData,
   categories,
   units,
+  wholesaleUnits = [],
   companies,
   handlePricingChange,
   handleSubmit,
@@ -246,11 +247,90 @@ const StockItemModal = ({
               </label>
               <div className="relative group">
                 <textarea
-                  rows="3"
+                  rows="2"
                   placeholder="Optional product description..."
                   className="w-full px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-100 focus:border-indigo-600 outline-none transition-colors duration-200 text-slate-800 placeholder-slate-400 text-sm font-medium resize-none"
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Wholesale Configuration with Distinct Top Line Divider */}
+            <div className="col-span-1 md:col-span-2 pt-4 mt-1 border-t-2 border-dashed border-amber-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/60">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-500 text-white rounded-lg shadow-xs">
+                    <Boxes size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900">Wholesale & Packaging Configuration</h3>
+                    <p className="text-[11px] text-amber-700">Set wholesale pack pricing and unit multiplier for bulk sales.</p>
+                  </div>
+                </div>
+                {formData.wholesaleUnit && Number(formData.wholesaleMultiplier) > 1 && (
+                  <span className="text-xs font-semibold bg-white text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs">
+                    1 {formData.wholesaleUnit} = {formData.wholesaleMultiplier} {formData.unit || 'units'}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Boxes size={14} className="text-amber-600" /> Wholesale Unit Name
+              </label>
+              <div className="relative group">
+                <select
+                  className="w-full px-4 py-2.5 bg-white hover:bg-slate-50 border border-amber-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-colors duration-200 text-slate-800 text-sm font-medium appearance-none cursor-pointer"
+                  value={formData.wholesaleUnit || ''}
+                  onChange={e => setFormData({ ...formData, wholesaleUnit: e.target.value })}
+                >
+                  <option value="">None / Select Wholesale Unit</option>
+                  {wholesaleUnits.map((u, i) => (
+                    <option key={u.id || i} value={u.name}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Scale size={14} className="text-amber-600" /> Units per Wholesale Unit (Multiplier)
+              </label>
+              <div className="group">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="e.g. 10 (1 Pack = 10 cards/units)"
+                  className="w-full px-4 py-2.5 bg-white hover:bg-slate-50 border border-amber-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-colors duration-200 text-slate-800 placeholder-slate-400 text-sm font-medium"
+                  value={formData.wholesaleMultiplier || ''}
+                  onChange={e => setFormData({ ...formData, wholesaleMultiplier: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5 col-span-1 md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <DollarSign size={14} className="text-amber-600" /> Wholesale Selling Price (₦ per {formData.wholesaleUnit || 'Pack'})
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 font-semibold text-sm group-focus-within:text-amber-600 transition-colors">
+                  ₦
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-4 py-2.5 bg-white hover:bg-slate-50 border border-amber-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-colors duration-200 text-slate-800 placeholder-slate-400 text-sm font-medium"
+                  value={formData.wholesalePrice || ''}
+                  onChange={e => setFormData({ ...formData, wholesalePrice: e.target.value })}
                 />
               </div>
             </div>

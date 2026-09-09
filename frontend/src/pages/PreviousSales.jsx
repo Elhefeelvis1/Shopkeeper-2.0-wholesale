@@ -30,13 +30,14 @@ const PreviousSales = () => {
   const [shopDetails, setShopDetails] = useState(null);
 
   const { user } = useContext(UserContext) || {};
-  const showProfit = user?.role === 'administrator';
+  const isAdmin = user?.role === 'administrator';
+  const showProfit = isAdmin;
 
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Statistics
+  // Statistics (Admin only)
   const [stats, setStats] = useState({
     totalCount: 0,
     totalRevenue: 0,
@@ -75,6 +76,7 @@ const PreviousSales = () => {
   };
 
   const calculateStats = (salesList) => {
+    if (!isAdmin) return;
     let totalRevenue = 0;
     let totalDiscount = 0;
     let totalCost = 0;
@@ -193,7 +195,7 @@ const PreviousSales = () => {
     { label: 'Product Name', key: 'productName' },
     { label: 'Quantity Sold', key: 'qtySold' },
     { label: 'Selling Price/Unit', key: 'sellingPriceUnit' },
-    { label: 'Cost at Sale', key: 'costAtSale' },
+    ...(isAdmin ? [{ label: 'Cost at Sale', key: 'costAtSale' }] : []),
     { label: 'Line Net Price', key: 'lineNetPrice' },
     { label: 'Discount Applied', key: 'discountApplied' },
     { label: 'Sale Net Total', key: 'saleNetTotal' },
@@ -217,7 +219,7 @@ const PreviousSales = () => {
         productName: 'N/A',
         qtySold: 0,
         sellingPriceUnit: 0,
-        costAtSale: 0,
+        ...(isAdmin ? { costAtSale: 0 } : {}),
         lineNetPrice: 0
       }];
     }
@@ -227,7 +229,7 @@ const PreviousSales = () => {
       productName: item.product_name,
       qtySold: item.quantity_sold,
       sellingPriceUnit: item.selling_price_per_unit,
-      costAtSale: item.cost_at_sale,
+      ...(isAdmin ? { costAtSale: item.cost_at_sale } : {}),
       lineNetPrice: (item.quantity_sold * parseFloat(item.selling_price_per_unit)).toFixed(2)
     }));
   });
@@ -253,41 +255,41 @@ const PreviousSales = () => {
         )}
       </div>
 
-      {/* KPI Stats */}
-      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isTodayOnly ? '' : 'lg:grid-cols-4'} gap-4`}>
-        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
-            <ShoppingBag size={22} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs sm:text-sm font-medium text-gray-500">Sales Count</p>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5">{stats.totalCount}</p>
-          </div>
-        </div>
-
-        {!isTodayOnly && (
+      {/* KPI Stats (Admin Only) */}
+      {isAdmin && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isTodayOnly ? '' : 'lg:grid-cols-4'} gap-4`}>
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
-              <DollarSign size={22} />
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+              <ShoppingBag size={22} />
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-medium text-gray-500">Net Revenue</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5">₦{formatMoney(stats.totalRevenue)}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500">Sales Count</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5">{stats.totalCount}</p>
             </div>
           </div>
-        )}
 
-        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-rose-50 text-rose-600 rounded-xl shrink-0">
-            <Percent size={22} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs sm:text-sm font-medium text-gray-500">Discounts Given</p>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5">₦{formatMoney(stats.totalDiscount)}</p>
-          </div>
-        </div>
+          {!isTodayOnly && (
+            <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
+                <DollarSign size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Net Revenue</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5">₦{formatMoney(stats.totalRevenue)}</p>
+              </div>
+            </div>
+          )}
 
-        {showProfit && (
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-rose-50 text-rose-600 rounded-xl shrink-0">
+              <Percent size={22} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-gray-500">Discounts Given</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5">₦{formatMoney(stats.totalDiscount)}</p>
+            </div>
+          </div>
+
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0">
               <TrendingUp size={22} />
@@ -302,8 +304,8 @@ const PreviousSales = () => {
               </p>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Date & Filter Card */}
       {!isTodayOnly && (

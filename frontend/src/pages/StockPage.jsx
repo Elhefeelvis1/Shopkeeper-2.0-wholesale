@@ -11,6 +11,7 @@ const StockPage = () => {
   const [inventory, setInventory] = useState([]);
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
+  const [wholesaleUnits, setWholesaleUnits] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -31,7 +32,8 @@ const StockPage = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: '', genericName: '', barcode: '', category: '', company: '', unit: '',
-    cost: '', markup: '', price: '', reorderLevel: '', description: '', quantity: ''
+    cost: '', markup: '', price: '', reorderLevel: '', description: '', quantity: '',
+    wholesalePrice: '', wholesaleUnit: '', wholesaleMultiplier: ''
   });
   const [ItemOnEdit, setItemOnEdit] = useState(null);
 
@@ -65,9 +67,10 @@ const StockPage = () => {
 
   const fetchOptions = async () => {
     try {
-      const optsRes = await axios.get('/api/stockPage').catch(() => ({ data: { categories: [], units: [], companies: [] } }));
+      const optsRes = await axios.get('/api/stockPage').catch(() => ({ data: { categories: [], units: [], wholesaleUnits: [], companies: [] } }));
       setCategories(optsRes.data.categories || []);
       setUnits(optsRes.data.units || []);
+      setWholesaleUnits(optsRes.data.wholesaleUnits || []);
       setCompanies(optsRes.data.companies || []);
     } catch (err) {
       console.error(err);
@@ -129,7 +132,8 @@ const StockPage = () => {
     setItemOnEdit(null);
     setFormData({
       name: '', genericName: '', barcode: '', category: '', company: '', unit: '',
-      cost: '', markup: '', price: '', reorderLevel: '', description: '', quantity: ''
+      cost: '', markup: '', price: '', reorderLevel: '', description: '', quantity: '',
+      wholesalePrice: '', wholesaleUnit: '', wholesaleMultiplier: ''
     });
     setShowAddModal(true);
   };
@@ -152,7 +156,10 @@ const StockPage = () => {
       price: price || '',
       reorderLevel: item.reorder_level || '',
       description: item.description || '',
-      quantity: item.total_quantity_in_stock || ''
+      quantity: item.total_quantity_in_stock || '',
+      wholesalePrice: item.wholesale_price || '',
+      wholesaleUnit: item.wholesale_unit || '',
+      wholesaleMultiplier: item.wholesale_multiplier || '1'
     });
     setShowAddModal(true);
   };
@@ -162,7 +169,8 @@ const StockPage = () => {
     setItemOnEdit(null);
     setFormData({
       name: '', genericName: '', barcode: '', category: '', company: '', unit: '',
-      cost: '', markup: '', price: '', reorderLevel: '', description: '', quantity: ''
+      cost: '', markup: '', price: '', reorderLevel: '', description: '', quantity: '',
+      wholesalePrice: '', wholesaleUnit: '', wholesaleMultiplier: ''
     });
   };
 
@@ -226,7 +234,10 @@ const StockPage = () => {
       });
       const allItems = res.data.contents || [];
 
-      const headers = ["Name", "Generic Name", "Barcode", "Category", "Unit", "In Stock", "Cost", "Price", "Reorder Level"];
+      const headers = [
+        "Name", "Generic Name", "Barcode", "Category", "Unit", 
+        "In Stock", "Cost", "Retail Price", "Wholesale Unit", "Units Per Pack", "Wholesale Price", "Reorder Level"
+      ];
       const rows = allItems.map(item => [
         item.name,
         item.generic_name || '',
@@ -236,6 +247,9 @@ const StockPage = () => {
         item.total_quantity_in_stock,
         item.last_cost_price,
         item.unit_selling_price,
+        item.wholesale_unit || '',
+        item.wholesale_multiplier || 1,
+        item.wholesale_price || 0,
         item.reorder_level
       ]);
 
@@ -348,7 +362,14 @@ const StockPage = () => {
                       {item.total_quantity_in_stock} <span className="text-gray-400 text-xs">{item.unit}</span>
                     </td>
                     <td className="px-6 py-4 text-right text-gray-600">₦{formatMoney(item.last_cost_price)}</td>
-                    <td className="px-6 py-4 text-right font-medium text-indigo-600">₦{formatMoney(item.unit_selling_price)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="font-semibold text-indigo-600">₦{formatMoney(item.unit_selling_price)}</div>
+                      {Number(item.wholesale_price) > 0 && (
+                        <div className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200/60 rounded px-1.5 py-0.5 mt-0.5 inline-block" title={`1 ${item.wholesale_unit || 'Pack'} = ${item.wholesale_multiplier || 1} ${item.unit || 'units'}`}>
+                          WS: ₦{formatMoney(item.wholesale_price)}/{item.wholesale_unit || 'Pack'}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-center">
                       {item.total_quantity_in_stock <= item.reorder_level ? (
                         <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 px-2.5 py-1 rounded-full text-xs font-medium border border-red-100">
@@ -397,6 +418,7 @@ const StockPage = () => {
         setFormData={setFormData}
         categories={categories}
         units={units}
+        wholesaleUnits={wholesaleUnits}
         companies={companies}
         handlePricingChange={handlePricingChange}
         handleSubmit={handleSubmit}

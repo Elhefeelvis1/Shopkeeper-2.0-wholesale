@@ -9,6 +9,7 @@ export class ShopKeeperDB extends Dexie {
       banks: 'id, bank_name',
       customers: 'id, local_id, name, phone_number, sync_status',
       salesQueue: '++id, status, created_at',
+      wholesaleQueue: '++id, status, created_at',
       customerNotesQueue: '++id, customer_id, status',
       shopDetails: 'id',
       authCache: 'username, lastLogin',
@@ -75,11 +76,12 @@ export async function searchLocalProducts({ itemName = '', category = '', minPri
   const max = maxPrice ? parseFloat(maxPrice) : null;
 
   return await collection.filter(product => {
-    // Name or Barcode filter
+    // Name, Generic Name or Barcode filter
     if (lowerName) {
       const matchName = product.item_name && product.item_name.toLowerCase().includes(lowerName);
+      const matchGeneric = product.generic_name && product.generic_name.toLowerCase().includes(lowerName);
       const matchBarcode = product.barcode && product.barcode.toLowerCase().includes(lowerName);
-      if (!matchName && !matchBarcode) return false;
+      if (!matchName && !matchGeneric && !matchBarcode) return false;
     }
 
     // Category filter
@@ -99,7 +101,42 @@ export async function searchLocalProducts({ itemName = '', category = '', minPri
 }
 
 /**
- * Atomically decrement local stock in Dexie when completing a sale
+ * Fast client-side wholesale product search across Dexie IndexedDB
+ */
+export async function searchLocalWholesaleProducts({ itemName = '', category = '', minPrice = '', maxPrice = '' }) {
+  let collection = db.products.toCollection();
+
+  const lowerName = itemName ? itemName.trim().toLowerCase() : '';
+  const min = minPrice ? parseFloat(minPrice) : null;
+  const max = maxPrice ? parseFloat(maxPrice) : null;
+
+  return await collection.filter(product => {
+    // Name, Generic Name or Barcode filter
+    if (lowerName) {
+      const matchName = product.item_name && product.item_name.toLowerCase().includes(lowerName);
+      const matchGeneric = product.generic_name && product.generic_name.toLowerCase().includes(lowerName);
+      const matchBarcode = product.barcode && product.barcode.toLowerCase().includes(lowerName);
+      if (!matchName && !matchGeneric && !matchBarcode) return false;
+    }
+
+    // Category filter
+    if (category) {
+      if (!product.category_name || product.category_name.toLowerCase() !== category.toLowerCase()) {
+        return false;
+      }
+    }
+
+    // Wholesale Price range filters
+    const price = parseFloat(product.wholesale_price || product.unit_selling_price || 0);
+    if (min !== null && !isNaN(min) && price < min) return false;
+    if (max !== null && !isNaN(max) && price > max) return false;
+
+    return true;
+  }).toArray();
+}
+
+/**
+ * Atomically decrement local stock in Dexie when completing a retail sale
  */
 export async function decrementLocalStock(items) {
   await db.transaction('rw', db.products, async () => {
@@ -116,10 +153,42 @@ export async function decrementLocalStock(items) {
 }
 
 /**
+ * Atomically decrement local stock in Dexie when completing a wholesale sale (units = quantity * multiplier)
+ */
+export async function decrementLocalWholesaleStock(items) {
+  await db.transaction('rw', db.products, async () => {
+    for (const item of items) {
+      const productId = item.productId || item.item_id;
+      const quantity = Number(item.quantity);
+      const multiplier = Math.max(1, Number(item.unitMultiplier || item.wholesale_multiplier || 1));
+      const totalBaseUnits = quantity * multiplier;
+
+      const product = await db.products.get(productId);
+      if (product) {
+        const newStock = Math.max(0, (Number(product.total_quantity_in_stock) || 0) - totalBaseUnits);
+        await db.products.update(productId, { total_quantity_in_stock: newStock });
+      }
+    }
+  });
+}
+
+/**
  * Queue a sale for background or immediate sync
  */
 export async function queueSale(payload) {
   return await db.salesQueue.add({
+    payload,
+    status: 'pending',
+    sync_attempts: 0,
+    created_at: new Date().toISOString()
+  });
+}
+
+/**
+ * Queue a wholesale sale for background or immediate sync
+ */
+export async function queueWholesale(payload) {
+  return await db.wholesaleQueue.add({
     payload,
     status: 'pending',
     sync_attempts: 0,

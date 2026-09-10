@@ -129,27 +129,33 @@ export const UserProvider = ({ children }) => {
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
     if (isOnline) {
+      let res;
       try {
-        const res = await axios.post('/api/login', { username, password });
-        if (res.data && res.data.success) {
-          const userData = res.data.user;
-          setUser(userData);
-          if (userData.theme) setTheme(userData.theme);
-          localStorage.setItem('shopkeeper_user', JSON.stringify(userData));
-          // Cache offline credentials
-          await cacheUserAuth(userData, password);
-          // Trigger initial sync
-          syncAll().catch(e => console.warn('Sync on login:', e));
-          return { success: true };
-        }
-        return { success: false, message: res.data?.message || 'Login failed' };
+        res = await axios.post('/api/login', { username, password });
       } catch (err) {
-        // If network failed during login attempt, try offline login
-        if (!err.response) {
+        // If network is down or server is unreachable, attempt offline login fallback
+        if (!err.response && (err.code === 'ERR_NETWORK' || !navigator.onLine)) {
           return await offlineLogin(username, password);
         }
         return { success: false, message: err.response?.data?.message || 'Login failed' };
       }
+
+      if (res.data && res.data.success) {
+        const userData = res.data.user;
+        setUser(userData);
+        if (userData.theme) setTheme(userData.theme);
+        localStorage.setItem('shopkeeper_user', JSON.stringify(userData));
+
+        // Cache offline credentials safely (does not block or fail online login)
+        cacheUserAuth(userData, password).catch(e => console.warn('Offline auth cache warning:', e));
+
+        // Trigger initial background sync
+        syncAll().catch(e => console.warn('Sync on login:', e));
+
+        return { success: true };
+      }
+
+      return { success: false, message: res.data?.message || 'Login failed' };
     } else {
       return await offlineLogin(username, password);
     }

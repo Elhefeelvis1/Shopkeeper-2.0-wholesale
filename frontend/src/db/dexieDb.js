@@ -21,30 +21,55 @@ export class ShopKeeperDB extends Dexie {
 export const db = new ShopKeeperDB();
 
 /**
- * SHA-256 password hashing using Web Crypto API for secure offline authentication
+ * SHA-256 password hashing with fallback for non-secure contexts (HTTP over LAN)
  */
 export async function hashPassword(password, salt = 'shopkeeper_salt_key') {
-  const enc = new TextEncoder();
-  const data = enc.encode(password + salt);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const str = password + salt;
+  if (typeof crypto !== 'undefined' && crypto?.subtle?.digest) {
+    try {
+      const enc = new TextEncoder();
+      const data = enc.encode(str);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      console.warn('crypto.subtle digest failed, using fallback hash:', e);
+    }
+  }
+
+  // Deterministic fallback hash for non-secure HTTP origins where crypto.subtle is unavailable
+  let h1 = 0xdeadbeef ^ 0;
+  let h2 = 0x41c6ce57 ^ 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
 }
 
 /**
  * Cache user credentials for offline login
  */
 export async function cacheUserAuth(user, password) {
-  if (!user || !user.username) return;
-  const username = user.username.toLowerCase();
-  const passwordHash = password ? await hashPassword(password) : null;
-  
-  await db.authCache.put({
-    username,
-    userObj: user,
-    passwordHash,
-    lastLogin: new Date().toISOString()
-  });
+  try {
+    if (!user || !user.username) return;
+    const username = user.username.toLowerCase();
+    const passwordHash = password ? await hashPassword(password) : null;
+    
+    await db.authCache.put({
+      username,
+      userObj: user,
+      passwordHash,
+      lastLogin: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('Failed to cache offline auth credentials:', err);
+  }
 }
 
 /**

@@ -148,73 +148,101 @@ export async function pushPendingCustomers() {
   return syncedCustomerCount;
 }
 
+let isPushingSales = false;
+
 /**
  * Push pending sales queue to server
  */
 export async function pushPendingSales() {
+  if (isPushingSales) return 0;
+  isPushingSales = true;
   let uploadedSalesCount = 0;
-  const pendingSales = await db.salesQueue.filter(s => s.status === 'pending').sortBy('id');
 
-  for (const sale of pendingSales) {
-    try {
-      const res = await axios.post('/api/process-sale', sale.payload);
-      if (res.data && res.data.success) {
-        // Successfully processed on server, remove from queue
-        await db.salesQueue.delete(sale.id);
-        uploadedSalesCount++;
-      } else {
+  try {
+    const pendingSales = await db.salesQueue.filter(s => s.status === 'pending').sortBy('id');
+
+    for (const sale of pendingSales) {
+      // Mark as syncing to prevent concurrent duplicate pick-up
+      await db.salesQueue.update(sale.id, { status: 'syncing' });
+
+      try {
+        const res = await axios.post('/api/process-sale', sale.payload);
+        if (res.data && res.data.success) {
+          // Successfully processed on server, remove from queue
+          await db.salesQueue.delete(sale.id);
+          uploadedSalesCount++;
+        } else {
+          await db.salesQueue.update(sale.id, {
+            status: 'pending',
+            sync_attempts: (sale.sync_attempts || 0) + 1,
+            error_message: res.data?.message || 'Server rejected sale'
+          });
+        }
+      } catch (err) {
+        console.error('Failed to sync sale id', sale.id, err);
         await db.salesQueue.update(sale.id, {
+          status: 'pending',
           sync_attempts: (sale.sync_attempts || 0) + 1,
-          error_message: res.data?.message || 'Server rejected sale'
+          error_message: err.response?.data?.message || err.message
         });
-      }
-    } catch (err) {
-      console.error('Failed to sync sale id', sale.id, err);
-      await db.salesQueue.update(sale.id, {
-        sync_attempts: (sale.sync_attempts || 0) + 1,
-        error_message: err.response?.data?.message || err.message
-      });
-      // Break on fatal network failure to prevent repeating on bad connection
-      if (!err.response) {
-        break;
+        // Break on fatal network failure to prevent repeating on bad connection
+        if (!err.response) {
+          break;
+        }
       }
     }
+  } finally {
+    isPushingSales = false;
   }
 
   return uploadedSalesCount;
 }
 
+let isPushingWholesales = false;
+
 /**
  * Push pending wholesale sales queue to server
  */
 export async function pushPendingWholesales() {
+  if (isPushingWholesales) return 0;
+  isPushingWholesales = true;
   let uploadedWholesalesCount = 0;
-  const pendingWholesales = await db.wholesaleQueue.filter(s => s.status === 'pending').sortBy('id');
 
-  for (const item of pendingWholesales) {
-    try {
-      const res = await axios.post('/api/process-wholesale', item.payload);
-      if (res.data && res.data.success) {
-        // Successfully processed on server, remove from queue
-        await db.wholesaleQueue.delete(item.id);
-        uploadedWholesalesCount++;
-      } else {
+  try {
+    const pendingWholesales = await db.wholesaleQueue.filter(s => s.status === 'pending').sortBy('id');
+
+    for (const item of pendingWholesales) {
+      // Mark as syncing to prevent concurrent duplicate pick-up
+      await db.wholesaleQueue.update(item.id, { status: 'syncing' });
+
+      try {
+        const res = await axios.post('/api/process-wholesale', item.payload);
+        if (res.data && res.data.success) {
+          // Successfully processed on server, remove from queue
+          await db.wholesaleQueue.delete(item.id);
+          uploadedWholesalesCount++;
+        } else {
+          await db.wholesaleQueue.update(item.id, {
+            status: 'pending',
+            sync_attempts: (item.sync_attempts || 0) + 1,
+            error_message: res.data?.message || 'Server rejected wholesale'
+          });
+        }
+      } catch (err) {
+        console.error('Failed to sync wholesale id', item.id, err);
         await db.wholesaleQueue.update(item.id, {
+          status: 'pending',
           sync_attempts: (item.sync_attempts || 0) + 1,
-          error_message: res.data?.message || 'Server rejected wholesale'
+          error_message: err.response?.data?.message || err.message
         });
-      }
-    } catch (err) {
-      console.error('Failed to sync wholesale id', item.id, err);
-      await db.wholesaleQueue.update(item.id, {
-        sync_attempts: (item.sync_attempts || 0) + 1,
-        error_message: err.response?.data?.message || err.message
-      });
-      // Break on fatal network failure to prevent repeating on bad connection
-      if (!err.response) {
-        break;
+        // Break on fatal network failure to prevent repeating on bad connection
+        if (!err.response) {
+          break;
+        }
       }
     }
+  } finally {
+    isPushingWholesales = false;
   }
 
   return uploadedWholesalesCount;

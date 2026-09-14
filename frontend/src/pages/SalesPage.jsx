@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Search, Plus, Trash2, ShoppingBag, CreditCard, User, Building, StickyNote, History } from 'lucide-react';
@@ -20,6 +20,7 @@ const SalesPage = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [isPreviousSalesOpen, setIsPreviousSalesOpen] = useState(false);
   const { user } = useOutletContext() || {};
+  const isSubmittingRef = useRef(false);
 
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -156,6 +157,7 @@ const SalesPage = () => {
   const amountPayable = Math.max(0, total - discountAmount);
 
   const handleCheckout = async () => {
+    if (isSubmittingRef.current) return;
     if (cart.length === 0) return showToast('error', 'Cart is empty');
     if (!paymentRoute) return showToast('error', 'Select a payment route');
     if ((paymentRoute === 'Transfer' || paymentRoute === 'POS') && !selectedBank) return showToast('error', `Select a bank for ${paymentRoute}`);
@@ -166,9 +168,15 @@ const SalesPage = () => {
       return showToast('error', `Please enter a valid quantity for ${invalidItem.item_name}`);
     }
 
+    isSubmittingRef.current = true;
     setProcessing(true);
 
+    const clientSaleId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sale_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
     const payload = {
+      clientSaleId,
       items: cart.map(item => ({
         productId: item.item_id || item.id,
         quantity: Number(item.quantity),
@@ -247,6 +255,7 @@ const SalesPage = () => {
       console.error('Checkout error:', err);
       showToast('error', err.message || 'Failed to complete sale.');
     } finally {
+      isSubmittingRef.current = false;
       setProcessing(false);
     }
   };

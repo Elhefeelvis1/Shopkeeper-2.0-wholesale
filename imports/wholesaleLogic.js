@@ -70,15 +70,31 @@ export async function searchWholesaleDb(name, category, startPrice, stopPrice, d
     }
 }
 
+let isWholesaleSchemaChecked = false;
+async function ensureClientWholesaleIdColumn(db) {
+    if (isWholesaleSchemaChecked) return;
+    try {
+        await db.query(`
+            ALTER TABLE wholesales ADD COLUMN IF NOT EXISTS client_wholesale_id VARCHAR(100);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_wholesales_client_wholesale_id ON wholesales (client_wholesale_id) WHERE client_wholesale_id IS NOT NULL;
+        `);
+        isWholesaleSchemaChecked = true;
+    } catch (e) {
+        console.warn('Note: client_wholesale_id check in wholesales:', e.message);
+    }
+}
+
 /**
  * Record a Wholesale transaction (FEFO stock lot deduction with unit multipliers)
  */
 export async function saveWholesale(userId, wholesaleData, db, res) {
     try {
+        await ensureClientWholesaleIdColumn(db);
         await db.query('BEGIN');
 
         const items = wholesaleData.items;
         const totalDiscountValue = parseFloat(wholesaleData.totalDiscount) || 0;
+        const clientWholesaleId = wholesaleData.clientWholesaleId || wholesaleData.client_wholesale_id || null;
 
         // Validation
         if (!userId || !Array.isArray(items) || items.length === 0) {
@@ -91,18 +107,44 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
             return res.status(400).json({ success: false, message: 'Invalid discount value provided (cannot be negative).' });
         }
 
+        // Idempotency Check: Avoid Duplicate Wholesales
+        if (clientWholesaleId) {
+            const existingWholesale = await db.query(
+                `SELECT w.id, w.user_id, w.total_amount, w.discount_applied, w.wholesale_date, u.username 
+                 FROM wholesales w 
+                 LEFT JOIN users u ON w.user_id = u.id 
+                 WHERE w.client_wholesale_id = $1;`,
+                [clientWholesaleId]
+            );
+
+            if (existingWholesale.rows.length > 0) {
+                await db.query('COMMIT');
+                const wholesaleRecord = existingWholesale.rows[0];
+                return {
+                    wholesaleId: wholesaleRecord.id,
+                    username: wholesaleRecord.username || 'Wholesale Rep',
+                    wholesaleData: items,
+                    totalAmount: parseFloat(wholesaleRecord.total_amount).toFixed(2),
+                    discountApplied: parseFloat(wholesaleRecord.discount_applied).toFixed(2),
+                    wholesaleDate: wholesaleRecord.wholesale_date,
+                    isDuplicate: true
+                };
+            }
+        }
+
         // 1. Create Initial Wholesale Header
         let totalWholesaleAmount = 0;
         const wholesaleResult = await db.query(
-            `INSERT INTO wholesales (user_id, total_amount, discount_applied, customer_id, pay_route, bank_id)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, wholesale_date;`,
+            `INSERT INTO wholesales (user_id, total_amount, discount_applied, customer_id, pay_route, bank_id, client_wholesale_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, wholesale_date;`,
             [
                 userId,
                 0.00,
                 0.00,
                 wholesaleData.customerId ? parseInt(wholesaleData.customerId, 10) : null,
                 wholesaleData.payRoute || 'Cash',
-                wholesaleData.bank ? parseInt(wholesaleData.bank, 10) : null
+                wholesaleData.bank ? parseInt(wholesaleData.bank, 10) : null,
+                clientWholesaleId
             ]
         );
         const wholesaleId = wholesaleResult.rows[0].id;

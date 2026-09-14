@@ -119,3 +119,17 @@ EXECUTE FUNCTION create_debt_after_wholesale();
 ALTER TABLE users 
 ADD COLUMN IF NOT EXISTS theme VARCHAR(20) DEFAULT 'light';
 
+-- 9. Idempotency Columns & Indexes to Prevent Duplicate Sales / Wholesales
+ALTER TABLE sales 
+ADD COLUMN IF NOT EXISTS client_sale_id VARCHAR(100);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_client_sale_id 
+ON sales (client_sale_id) 
+WHERE client_sale_id IS NOT NULL;
+
+ALTER TABLE wholesales 
+ADD COLUMN IF NOT EXISTS client_wholesale_id VARCHAR(100);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wholesales_client_wholesale_id 
+ON wholesales (client_wholesale_id) 
+WHERE client_wholesale_id IS NOT NULL;

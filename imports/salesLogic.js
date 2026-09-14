@@ -58,13 +58,29 @@ export async function searchDb(name, category, startPrice, stopPrice, db){
     }
 }
 
+let isSalesSchemaChecked = false;
+async function ensureClientSaleIdColumn(db) {
+    if (isSalesSchemaChecked) return;
+    try {
+        await db.query(`
+            ALTER TABLE sales ADD COLUMN IF NOT EXISTS client_sale_id VARCHAR(100);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_client_sale_id ON sales (client_sale_id) WHERE client_sale_id IS NOT NULL;
+        `);
+        isSalesSchemaChecked = true;
+    } catch (e) {
+        console.warn('Note: client_sale_id check in sales:', e.message);
+    }
+}
+
 // Function to record a sale
 export async function saveSale(userId, saleData, db, res){
     try {
+        await ensureClientSaleIdColumn(db);
         await db.query('BEGIN');
 
         const items = saleData.items;
         const totalDiscountValue = parseFloat(saleData.totalDiscount) || 0; 
+        const clientSaleId = saleData.clientSaleId || saleData.client_sale_id || null;
         
         // --- Initial Validation ---
         if (!userId || !Array.isArray(items) || items.length === 0) {
@@ -78,13 +94,38 @@ export async function saveSale(userId, saleData, db, res){
             await db.query('ROLLBACK');
             return res.status(400).json({ message: 'Invalid discount value provided (cannot be negative).' });
         }
+
+        // --- Idempotency Check: Avoid Duplicate Sales ---
+        if (clientSaleId) {
+            const existingSale = await db.query(
+                `SELECT s.id, s.user_id, s.total_amount, s.discount_applied, s.sale_date, u.username 
+                 FROM sales s 
+                 LEFT JOIN users u ON s.user_id = u.id 
+                 WHERE s.client_sale_id = $1;`,
+                [clientSaleId]
+            );
+
+            if (existingSale.rows.length > 0) {
+                await db.query('COMMIT');
+                const saleRecord = existingSale.rows[0];
+                return { 
+                    saleId: saleRecord.id,
+                    username: saleRecord.username || 'Unknown User',
+                    saleData: items,
+                    totalAmount: parseFloat(saleRecord.total_amount).toFixed(2),
+                    discountApplied: parseFloat(saleRecord.discount_applied).toFixed(2),
+                    saleDate: saleRecord.sale_date,
+                    isDuplicate: true
+                };
+            }
+        }
         
         // --- Sale Header Creation ---
         let totalSaleAmount = 0;
 
         const saleResult = await db.query(
-            `INSERT INTO sales (user_id, total_amount, discount_applied, customer_id, pay_route, bank_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`,
-            [userId, 0.00, 0.00, saleData.customerId ? parseInt(saleData.customerId) : null, saleData.payRoute, saleData.bank ? parseInt(saleData.bank) : null] // Temporary 0.00 values
+            `INSERT INTO sales (user_id, total_amount, discount_applied, customer_id, pay_route, bank_id, client_sale_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;`,
+            [userId, 0.00, 0.00, saleData.customerId ? parseInt(saleData.customerId) : null, saleData.payRoute, saleData.bank ? parseInt(saleData.bank) : null, clientSaleId]
         );
         const saleId = saleResult.rows[0].id;
 

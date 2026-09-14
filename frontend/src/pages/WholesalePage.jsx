@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Boxes, Plus, Trash2, CreditCard, User, Building, StickyNote, AlertTriangle, ShieldCheck, History } from 'lucide-react';
@@ -20,6 +20,7 @@ const WholesalePage = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [isPreviousSalesOpen, setIsPreviousSalesOpen] = useState(false);
   const { user } = useOutletContext() || {};
+  const isSubmittingRef = useRef(false);
 
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -175,6 +176,7 @@ const WholesalePage = () => {
   const amountPayable = Math.max(0, total - discountAmount);
 
   const handleCheckout = async () => {
+    if (isSubmittingRef.current) return;
     if (cart.length === 0) return showToast('error', 'Wholesale cart is empty');
     if (!paymentRoute) return showToast('error', 'Select a payment route');
     if ((paymentRoute === 'Transfer' || paymentRoute === 'POS') && !selectedBank) return showToast('error', `Select a bank for ${paymentRoute}`);
@@ -186,9 +188,15 @@ const WholesalePage = () => {
       return showToast('error', `Please enter a valid package quantity for ${invalidItem.item_name}`);
     }
 
+    isSubmittingRef.current = true;
     setProcessing(true);
 
+    const clientWholesaleId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `wholesale_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
     const payload = {
+      clientWholesaleId,
       items: cart.map(item => ({
         productId: item.item_id || item.id,
         quantity: Number(item.quantity),
@@ -278,6 +286,7 @@ const WholesalePage = () => {
       console.error('Wholesale checkout error:', err);
       showToast('error', err.message || 'Failed to complete wholesale sale.');
     } finally {
+      isSubmittingRef.current = false;
       setProcessing(false);
     }
   };

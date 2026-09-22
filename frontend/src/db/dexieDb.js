@@ -198,6 +198,43 @@ export async function decrementLocalWholesaleStock(items) {
 }
 
 /**
+ * Revert local stock if a sale fails or is rejected by server
+ */
+export async function revertLocalStock(items) {
+  await db.transaction('rw', db.products, async () => {
+    for (const item of items) {
+      const productId = item.productId || item.item_id || item.id;
+      const quantity = Number(item.quantity);
+      const product = await db.products.get(productId);
+      if (product) {
+        const newStock = (Number(product.total_quantity_in_stock) || 0) + quantity;
+        await db.products.update(productId, { total_quantity_in_stock: newStock });
+      }
+    }
+  });
+}
+
+/**
+ * Revert local wholesale stock if a wholesale sale fails or is rejected by server
+ */
+export async function revertLocalWholesaleStock(items) {
+  await db.transaction('rw', db.products, async () => {
+    for (const item of items) {
+      const productId = item.productId || item.item_id || item.id;
+      const quantity = Number(item.quantity);
+      const multiplier = Math.max(1, Number(item.unitMultiplier || item.wholesale_multiplier || 1));
+      const totalBaseUnits = quantity * multiplier;
+
+      const product = await db.products.get(productId);
+      if (product) {
+        const newStock = (Number(product.total_quantity_in_stock) || 0) + totalBaseUnits;
+        await db.products.update(productId, { total_quantity_in_stock: newStock });
+      }
+    }
+  });
+}
+
+/**
  * Queue a sale for background or immediate sync
  */
 export async function queueSale(payload) {

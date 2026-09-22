@@ -7,15 +7,22 @@ export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingSalesCount, setPendingSalesCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const { showToast } = useToast();
 
-  // Update pending sales count
+  // Update pending retail & wholesale sales count
   const refreshPendingCount = useCallback(async () => {
     try {
-      const count = await db.salesQueue.where('status').equals('pending').count();
-      setPendingSalesCount(count);
+      const salesCount = await db.salesQueue.where('status').anyOf('pending', 'syncing').count();
+      const wholesaleCount = await db.wholesaleQueue.where('status').anyOf('pending', 'syncing').count();
+      
+      const failedSales = await db.salesQueue.filter(s => !!s.error_message).count();
+      const failedWholesales = await db.wholesaleQueue.filter(w => !!w.error_message).count();
+
+      setPendingSalesCount(salesCount + wholesaleCount);
+      setFailedCount(failedSales + failedWholesales);
     } catch (err) {
-      console.error('Failed to get pending sales count', err);
+      console.error('Failed to get pending queue counts', err);
     }
   }, []);
 
@@ -87,6 +94,7 @@ export function useNetworkStatus() {
     isOnline,
     isSyncing,
     pendingSalesCount,
+    failedCount,
     triggerSync: () => handleManualSync(true),
     refreshPendingCount
   };

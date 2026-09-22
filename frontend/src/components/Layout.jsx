@@ -2,9 +2,10 @@ import { useState, useContext, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { UserContext } from '../context/UserContext';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import OfflineQueueModal from './OfflineQueueModal';
 import {
   LayoutDashboard, Package, Users, FileText, LogOut, RefreshCw,
-  Wrench, History, ChevronLeft, ChevronRight, Settings, UserCog, Locate, ChartNoAxesCombined, Home, Menu, X, ClipboardCheck, Wifi, WifiOff, CheckCircle2, Sun, Moon
+  Wrench, History, ChevronLeft, ChevronRight, Settings, UserCog, Locate, ChartNoAxesCombined, Home, Menu, X, ClipboardCheck, Wifi, WifiOff, CheckCircle2, Sun, Moon, AlertTriangle
 } from 'lucide-react';
 
 const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }) => {
@@ -133,107 +134,124 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
 const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const { logout, theme, changeTheme } = useContext(UserContext);
-  const { isOnline, isSyncing, pendingSalesCount, triggerSync } = useNetworkStatus();
+  const { isOnline, isSyncing, pendingSalesCount, failedCount, triggerSync, refreshPendingCount } = useNetworkStatus();
 
   return (
-    <header
-      className={`h-16 bg-white/95 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 shadow-xs fixed top-0 right-0 z-20 transition-all duration-300 ${showSidebar ? (isCollapsed ? 'left-0 md:left-20' : 'left-0 md:left-64') : 'left-0'
-        }`}
-    >
-      <div className="flex items-center gap-3 sm:gap-6">
-        {showSidebar && (
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="md:hidden p-1.5 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition cursor-pointer"
-            aria-label="Open Navigation Menu"
-          >
-            <Menu size={22} />
-          </button>
-        )}
-        {location.pathname === '/wholesale' ? (
-          <div className="flex items-center gap-2 select-none">
-            <span className="text-lg sm:text-xl font-bold text-gray-800 tracking-tight">ShopKeeper</span>
-          </div>
-        ) : (
-          <Link to="/home" className="text-lg sm:text-xl font-bold text-gray-800 truncate">ShopKeeper</Link>
-        )}
-        {user?.role === "administrator" && (location.pathname === '/sales' || location.pathname === '/purchases') && (
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer bg-indigo-50 sm:bg-transparent px-2.5 py-1.5 sm:p-0 rounded-lg"
-          >
-            &larr; <span className="hidden xs:inline">Back to</span> Dashboard
-          </button>
-        )}
-      </div>
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Quick Theme Toggle Button */}
-        <button
-          type="button"
-          onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition cursor-pointer"
-          title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-          aria-label="Toggle Theme"
-        >
-          {theme === 'dark' ? (
-            <Sun size={18} className="text-amber-400" />
-          ) : (
-            <Moon size={18} className="text-indigo-600" />
+    <>
+      <header
+        className={`h-16 bg-white/95 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 shadow-xs fixed top-0 right-0 z-20 transition-all duration-300 ${showSidebar ? (isCollapsed ? 'left-0 md:left-20' : 'left-0 md:left-64') : 'left-0'
+          }`}
+      >
+        <div className="flex items-center gap-3 sm:gap-6">
+          {showSidebar && (
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden p-1.5 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu size={22} />
+            </button>
           )}
-        </button>
-
-        {/* Network & Sync Badge */}
-        <div
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}
-          title={isOnline ? 'Connected to server' : 'Operating offline'}
-        >
-          {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span className="hidden xs:inline">{isOnline ? 'Online' : 'Offline'}</span>
+          {location.pathname === '/wholesale' ? (
+            <div className="flex items-center gap-2 select-none">
+              <span className="text-lg sm:text-xl font-bold text-gray-800 tracking-tight">ShopKeeper</span>
+            </div>
+          ) : (
+            <Link to="/home" className="text-lg sm:text-xl font-bold text-gray-800 truncate">ShopKeeper</Link>
+          )}
+          {user?.role === "administrator" && (location.pathname === '/sales' || location.pathname === '/purchases') && (
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer bg-indigo-50 sm:bg-transparent px-2.5 py-1.5 sm:p-0 rounded-lg"
+            >
+              &larr; <span className="hidden xs:inline">Back to</span> Dashboard
+            </button>
+          )}
         </div>
-
-        {pendingSalesCount > 0 ? (
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Theme Toggle Button */}
           <button
             type="button"
-            onClick={triggerSync}
-            disabled={!isOnline || isSyncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-xs font-semibold shadow-sm transition cursor-pointer disabled:opacity-75"
-            title="Click to sync pending offline sales"
+            onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition cursor-pointer"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+            aria-label="Toggle Theme"
           >
-            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
-            <span>{pendingSalesCount} Queued</span>
+            {theme === 'dark' ? (
+              <Sun size={18} className="text-amber-400" />
+            ) : (
+              <Moon size={18} className="text-indigo-600" />
+            )}
           </button>
-        ) : (
-          <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-            <CheckCircle2 size={14} className="text-emerald-500" />
-            <span>Synced</span>
+
+          {/* Network & Sync Badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}
+            title={isOnline ? 'Connected to server' : 'Operating offline'}
+          >
+            {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+            <span className="hidden xs:inline">{isOnline ? 'Online' : 'Offline'}</span>
           </div>
-        )}
 
-        {isOnline && (
+          {pendingSalesCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsQueueModalOpen(true)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-white rounded-full text-xs font-semibold shadow-sm transition cursor-pointer ${
+                failedCount > 0 ? 'bg-rose-500 hover:bg-rose-600' : 'bg-amber-500 hover:bg-amber-600'
+              }`}
+              title="Click to view and sync offline queued transactions"
+            >
+              {isSyncing ? (
+                <RefreshCw size={13} className="animate-spin" />
+              ) : failedCount > 0 ? (
+                <AlertTriangle size={13} />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              <span>{pendingSalesCount} Queued</span>
+            </button>
+          ) : (
+            <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+              <CheckCircle2 size={14} className="text-emerald-500" />
+              <span>Synced</span>
+            </div>
+          )}
+
+          {isOnline && (
+            <button
+              type="button"
+              onClick={triggerSync}
+              disabled={isSyncing}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 hover:border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition cursor-pointer disabled:opacity-50"
+              title="Sync latest master data with server"
+            >
+              <RefreshCw size={14} className={isSyncing ? 'animate-spin text-indigo-600' : ''} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={triggerSync}
-            disabled={isSyncing}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 hover:border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition cursor-pointer disabled:opacity-50"
-            title="Sync latest master data with server"
+            onClick={logout}
+            className="flex items-center gap-1.5 text-gray-600 hover:text-red-600 transition-colors px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-red-50 text-sm font-medium cursor-pointer"
           >
-            <RefreshCw size={14} className={isSyncing ? 'animate-spin text-indigo-600' : ''} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+            <LogOut size={16} />
+            <span className="hidden sm:inline">Logout</span>
           </button>
-        )}
+        </div>
+      </header>
 
-        <button
-          type="button"
-          onClick={logout}
-          className="flex items-center gap-1.5 text-gray-600 hover:text-red-600 transition-colors px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-red-50 text-sm font-medium cursor-pointer"
-        >
-          <LogOut size={16} />
-          <span className="hidden sm:inline">Logout</span>
-        </button>
-      </div>
-    </header>
+      {/* Offline Queue Modal */}
+      <OfflineQueueModal
+        isOpen={isQueueModalOpen}
+        onClose={() => setIsQueueModalOpen(false)}
+        onQueueUpdated={refreshPendingCount}
+      />
+    </>
   );
 };
 

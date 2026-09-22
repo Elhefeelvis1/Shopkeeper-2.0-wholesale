@@ -7,7 +7,7 @@ import Receipt from '../components/Receipt';
 import ProductSearch from '../components/ProductSearch';
 import PreviousSalesModal from '../components/PreviousSalesModal';
 import { useToast } from '../context/ToastContext';
-import { db, decrementLocalStock, queueSale } from '../db/dexieDb';
+import { db, decrementLocalStock, revertLocalStock, queueSale } from '../db/dexieDb';
 import { pullMasterData, pushPendingSales } from '../services/syncService';
 
 const SalesPage = () => {
@@ -193,7 +193,6 @@ const SalesPage = () => {
       // 1. Immediately decrement local stock in Dexie so POS remains accurate offline
       await decrementLocalStock(payload.items);
 
-      // 2. Queue sale in Dexie
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
       let onlineSuccess = false;
 
@@ -202,18 +201,27 @@ const SalesPage = () => {
           const res = await axios.post('/api/process-sale', payload);
           if (res.data && res.data.success) {
             onlineSuccess = true;
+            showToast('success', 'Sale processed successfully!');
+          } else {
+            throw new Error(res.data?.message || 'Failed to process sale on server.');
           }
         } catch (serverErr) {
-          console.warn('Online process-sale failed, queueing for background sync:', serverErr);
+          // If server explicitly returned an error response (HTTP 4xx/5xx), this is a server rejection, NOT offline.
+          if (serverErr.response) {
+            // Revert local stock deduction since sale was rejected
+            await revertLocalStock(payload.items);
+            throw new Error(serverErr.response.data?.message || serverErr.message || 'Server rejected sale.');
+          }
+
+          // Genuinely offline / network dropped during request
+          console.warn('Network unreachable, queueing sale for offline sync:', serverErr);
         }
       }
 
       if (!onlineSuccess) {
         // Save to offline sales queue
         await queueSale(payload);
-        showToast('info', 'Sale recorded in offline queue. Will sync when online.');
-      } else {
-        showToast('success', 'Sale processed successfully!');
+        showToast('info', 'Operating offline: Sale recorded in queue. Will sync automatically when online.');
       }
 
       // 3. Prepare Receipt
@@ -248,7 +256,7 @@ const SalesPage = () => {
       }, 500);
 
       // Trigger background sync if online
-      if (isOnline) {
+      if (isOnline && onlineSuccess) {
         pushPendingSales().catch(e => console.warn('Background sync push:', e));
       }
     } catch (err) {

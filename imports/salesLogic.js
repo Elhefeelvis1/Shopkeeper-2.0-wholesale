@@ -123,9 +123,14 @@ export async function saveSale(userId, saleData, db, res){
         // --- Sale Header Creation ---
         let totalSaleAmount = 0;
 
+        const rawCustomerId = saleData.customerId;
+        const validCustomerId = (rawCustomerId && !isNaN(parseInt(rawCustomerId)) && (typeof rawCustomerId !== 'string' || !rawCustomerId.startsWith('local_'))) 
+            ? parseInt(rawCustomerId) 
+            : null;
+
         const saleResult = await db.query(
             `INSERT INTO sales (user_id, total_amount, discount_applied, customer_id, pay_route, bank_id, client_sale_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;`,
-            [userId, 0.00, 0.00, saleData.customerId ? parseInt(saleData.customerId) : null, saleData.payRoute, saleData.bank ? parseInt(saleData.bank) : null, clientSaleId]
+            [userId, 0.00, 0.00, validCustomerId, saleData.payRoute, saleData.bank ? parseInt(saleData.bank) : null, clientSaleId]
         );
         const saleId = saleResult.rows[0].id;
 
@@ -139,7 +144,7 @@ export async function saveSale(userId, saleData, db, res){
             }
 
             // FEFO logic to retrieve stock lots
-            const availableLotsResult = await db.query(
+            let availableLotsResult = await db.query(
                 `SELECT lot_id, quantity_in_lot, cost_per_unit, expiry_date
                  FROM stock_lots
                  WHERE product_id = $1 AND quantity_in_lot > 0
@@ -150,7 +155,7 @@ export async function saveSale(userId, saleData, db, res){
             // Calculate total available stock for the product
             let currentTotalStock = 0;
             availableLotsResult.rows.forEach(lot => {
-                currentTotalStock += lot.quantity_in_lot;
+                currentTotalStock += Number(lot.quantity_in_lot);
             });
 
             let remainingToSell = quantity;
@@ -162,7 +167,7 @@ export async function saveSale(userId, saleData, db, res){
             for (const lot of availableLotsResult.rows) {
                 if (remainingToSell <= 0) break;
 
-                const quantityToSellFromLot = Math.min(remainingToSell, lot.quantity_in_lot);
+                const quantityToSellFromLot = Math.min(remainingToSell, Number(lot.quantity_in_lot));
 
                 if (quantityToSellFromLot > 0) {
                     // 1. COLLECT: Store the required update details for later execution
@@ -175,7 +180,7 @@ export async function saveSale(userId, saleData, db, res){
                     soldFromLots.push({
                         lotId: lot.lot_id,
                         quantity: quantityToSellFromLot,
-                        costPerUnit: lot.cost_per_unit,
+                        costPerUnit: parseFloat(lot.cost_per_unit) || 0,
                     });
 
                     remainingToSell -= quantityToSellFromLot;
@@ -183,10 +188,9 @@ export async function saveSale(userId, saleData, db, res){
             }
 
             if (remainingToSell > 0) {
-                // Insufficient stock rollback logic remains the same
                 await db.query('ROLLBACK');
                 return res.status(400).json({ 
-                    message: `Insufficient stock for Product ID: ${productId}. Requested: ${quantity}, Remaining unfulfilled: ${remainingToSell}.` 
+                    message: `Insufficient stock for Product ID: ${productId}. Requested: ${quantity}, Available in stock: ${currentTotalStock}.` 
                 });
             }
 

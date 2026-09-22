@@ -134,14 +134,26 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
 
         // 1. Create Initial Wholesale Header
         let totalWholesaleAmount = 0;
+        const rawCustomerId = wholesaleData.customerId;
+        const validCustomerId = (rawCustomerId && !isNaN(parseInt(rawCustomerId)) && (typeof rawCustomerId !== 'string' || !rawCustomerId.startsWith('local_'))) 
+            ? parseInt(rawCustomerId, 10) 
+            : null;
+
         const wholesaleResult = await db.query(
-            `INSERT INTO wholesales (user_id, total_amount, discount_applied, customer_id, pay_route, bank_id, client_wholesale_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, wholesale_date;`,
+            `INSERT INTO wholesales (
+                user_id, 
+                total_amount, 
+                discount_applied, 
+                customer_id, 
+                pay_route, 
+                bank_id,
+                client_wholesale_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, wholesale_date;`,
             [
                 userId,
                 0.00,
                 0.00,
-                wholesaleData.customerId ? parseInt(wholesaleData.customerId, 10) : null,
+                validCustomerId,
                 wholesaleData.payRoute || 'Cash',
                 wholesaleData.bank ? parseInt(wholesaleData.bank, 10) : null,
                 clientWholesaleId
@@ -169,7 +181,7 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
             }
 
             // Retrieve available lots sorted by expiry date (FEFO)
-            const availableLotsResult = await db.query(
+            let availableLotsResult = await db.query(
                 `SELECT lot_id, quantity_in_lot, cost_per_unit, expiry_date
                  FROM stock_lots
                  WHERE product_id = $1 AND quantity_in_lot > 0
@@ -181,14 +193,6 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
             availableLotsResult.rows.forEach(lot => {
                 currentTotalStock += Number(lot.quantity_in_lot);
             });
-
-            if (currentTotalStock < totalBaseUnitsToSell) {
-                await db.query('ROLLBACK');
-                return res.status(400).json({
-                    success: false,
-                    message: `Insufficient stock for product. Required: ${totalBaseUnitsToSell} base units (${quantity} ${wholesaleUnitName}s), Available: ${currentTotalStock} base units.`
-                });
-            }
 
             let remainingBaseUnitsToSell = totalBaseUnitsToSell;
             const soldFromLots = [];
@@ -210,6 +214,14 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
                     });
                     remainingBaseUnitsToSell -= deductFromLot;
                 }
+            }
+
+            if (remainingBaseUnitsToSell > 0) {
+                await db.query('ROLLBACK');
+                return res.status(400).json({
+                    success: false,
+                    message: `Insufficient stock for product. Required: ${totalBaseUnitsToSell} base units (${quantity} ${wholesaleUnitName}s), Available in stock: ${currentTotalStock} base units.`
+                });
             }
 
             // Batched stock_lots update

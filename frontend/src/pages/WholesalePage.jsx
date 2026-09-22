@@ -7,7 +7,7 @@ import WholesaleReceipt from '../components/WholesaleReceipt';
 import WholesaleProductSearch from '../components/WholesaleProductSearch';
 import PreviousWholesalesModal from '../components/PreviousWholesalesModal';
 import { useToast } from '../context/ToastContext';
-import { db, decrementLocalWholesaleStock, queueWholesale } from '../db/dexieDb';
+import { db, decrementLocalWholesaleStock, revertLocalWholesaleStock, queueWholesale } from '../db/dexieDb';
 import { pullMasterData, pushPendingWholesales } from '../services/syncService';
 
 const WholesalePage = () => {
@@ -227,17 +227,26 @@ const WholesalePage = () => {
           const res = await axios.post('/api/process-wholesale', payload);
           if (res.data && res.data.success) {
             onlineSuccess = true;
+            showToast('success', 'Wholesale sale completed successfully!');
+          } else {
+            throw new Error(res.data?.message || 'Failed to process wholesale sale on server.');
           }
         } catch (serverErr) {
-          console.warn('Online process-wholesale failed, queueing for background sync:', serverErr);
+          // If server explicitly returned an error response (HTTP 4xx/5xx), this is a server rejection, NOT offline.
+          if (serverErr.response) {
+            // Revert local stock deduction since sale was rejected
+            await revertLocalWholesaleStock(payload.items);
+            throw new Error(serverErr.response.data?.message || serverErr.message || 'Server rejected wholesale sale.');
+          }
+
+          // Genuinely offline / network dropped during request
+          console.warn('Network unreachable, queueing wholesale sale for offline sync:', serverErr);
         }
       }
 
       if (!onlineSuccess) {
         await queueWholesale(payload);
-        showToast('info', 'Wholesale transaction recorded offline. Will sync automatically when online.');
-      } else {
-        showToast('success', 'Wholesale sale completed successfully!');
+        showToast('info', 'Operating offline: Wholesale sale queued locally. Will sync automatically when online.');
       }
 
       // 3. Prepare Wholesale Receipt
@@ -279,7 +288,7 @@ const WholesalePage = () => {
       }, 500);
 
       // Trigger background sync
-      if (isOnline) {
+      if (isOnline && onlineSuccess) {
         pushPendingWholesales().catch(e => console.warn('Background sync push:', e));
       }
     } catch (err) {

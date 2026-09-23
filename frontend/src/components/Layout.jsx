@@ -136,7 +136,20 @@ const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
   const location = useLocation();
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const { logout, theme, changeTheme } = useContext(UserContext);
-  const { isOnline, isSyncing, pendingSalesCount, failedCount, triggerSync, refreshPendingCount } = useNetworkStatus();
+  const { 
+    isOnline, 
+    isSyncing, 
+    pendingRetailCount, 
+    pendingWholesaleCount, 
+    failedRetailCount, 
+    failedWholesaleCount, 
+    triggerSync, 
+    refreshPendingCount 
+  } = useNetworkStatus();
+
+  const isWholesale = location.pathname === '/wholesale';
+  const currentPendingCount = isWholesale ? pendingWholesaleCount : pendingRetailCount;
+  const currentFailedCount = isWholesale ? failedWholesaleCount : failedRetailCount;
 
   return (
     <>
@@ -196,23 +209,27 @@ const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
             <span className="hidden xs:inline">{isOnline ? 'Online' : 'Offline'}</span>
           </div>
 
-          {pendingSalesCount > 0 ? (
+          {currentPendingCount > 0 ? (
             <button
               type="button"
               onClick={() => setIsQueueModalOpen(true)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-white rounded-full text-xs font-semibold shadow-sm transition cursor-pointer ${
-                failedCount > 0 ? 'bg-rose-500 hover:bg-rose-600' : 'bg-amber-500 hover:bg-amber-600'
+                currentFailedCount > 0 
+                  ? 'bg-rose-500 hover:bg-rose-600' 
+                  : isWholesale 
+                    ? 'bg-purple-600 hover:bg-purple-700' 
+                    : 'bg-amber-500 hover:bg-amber-600'
               }`}
-              title="Click to view and sync offline queued transactions"
+              title={`Click to view and sync offline queued ${isWholesale ? 'wholesale' : 'retail'} transactions`}
             >
               {isSyncing ? (
                 <RefreshCw size={13} className="animate-spin" />
-              ) : failedCount > 0 ? (
+              ) : currentFailedCount > 0 ? (
                 <AlertTriangle size={13} />
               ) : (
                 <RefreshCw size={13} />
               )}
-              <span>{pendingSalesCount} Queued</span>
+              <span>{currentPendingCount} Queued</span>
             </button>
           ) : (
             <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
@@ -250,6 +267,7 @@ const Navbar = ({ user, showSidebar, isCollapsed, setMobileOpen }) => {
         isOpen={isQueueModalOpen}
         onClose={() => setIsQueueModalOpen(false)}
         onQueueUpdated={refreshPendingCount}
+        portal={isWholesale ? 'wholesale' : 'retail'}
       />
     </>
   );

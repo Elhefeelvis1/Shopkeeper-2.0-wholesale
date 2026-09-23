@@ -6,8 +6,10 @@ import { db } from '../db/dexieDb';
 export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [pendingSalesCount, setPendingSalesCount] = useState(0);
-  const [failedCount, setFailedCount] = useState(0);
+  const [pendingRetailCount, setPendingRetailCount] = useState(0);
+  const [pendingWholesaleCount, setPendingWholesaleCount] = useState(0);
+  const [failedRetailCount, setFailedRetailCount] = useState(0);
+  const [failedWholesaleCount, setFailedWholesaleCount] = useState(0);
   const { showToast } = useToast();
 
   // Update pending retail & wholesale sales count
@@ -19,8 +21,10 @@ export function useNetworkStatus() {
       const failedSales = await db.salesQueue.filter(s => !!s.error_message).count();
       const failedWholesales = await db.wholesaleQueue.filter(w => !!w.error_message).count();
 
-      setPendingSalesCount(salesCount + wholesaleCount);
-      setFailedCount(failedSales + failedWholesales);
+      setPendingRetailCount(salesCount);
+      setPendingWholesaleCount(wholesaleCount);
+      setFailedRetailCount(failedSales);
+      setFailedWholesaleCount(failedWholesales);
     } catch (err) {
       console.error('Failed to get pending queue counts', err);
     }
@@ -93,8 +97,12 @@ export function useNetworkStatus() {
   return {
     isOnline,
     isSyncing,
-    pendingSalesCount,
-    failedCount,
+    pendingRetailCount,
+    pendingWholesaleCount,
+    failedRetailCount,
+    failedWholesaleCount,
+    pendingSalesCount: pendingRetailCount + pendingWholesaleCount,
+    failedCount: failedRetailCount + failedWholesaleCount,
     triggerSync: () => handleManualSync(true),
     refreshPendingCount
   };

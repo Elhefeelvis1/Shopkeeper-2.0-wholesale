@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../db/dexieDb';
 import { syncAll } from '../services/syncService';
 import { useToast } from '../context/ToastContext';
-import { X, RefreshCw, Trash2, AlertCircle, ShoppingBag, Boxes, CheckCircle2, Clock } from 'lucide-react';
+import { X, RefreshCw, AlertCircle, ShoppingBag, Boxes, CheckCircle2, Clock } from 'lucide-react';
 
 const OfflineQueueModal = ({ isOpen, onClose, onQueueUpdated }) => {
   const [salesQueue, setSalesQueue] = useState([]);
@@ -46,24 +46,6 @@ const OfflineQueueModal = ({ isOpen, onClose, onQueueUpdated }) => {
       showToast('error', `Sync failed: ${err.message}`);
     } finally {
       setIsSyncing(false);
-    }
-  };
-
-  const handleDeleteItem = async (table, id) => {
-    if (!window.confirm('Are you sure you want to discard this queued transaction? This cannot be undone.')) {
-      return;
-    }
-    try {
-      if (table === 'sales') {
-        await db.salesQueue.delete(id);
-      } else {
-        await db.wholesaleQueue.delete(id);
-      }
-      await loadQueues();
-      if (onQueueUpdated) onQueueUpdated();
-      showToast('info', 'Queued transaction removed.');
-    } catch (err) {
-      showToast('error', `Failed to delete item: ${err.message}`);
     }
   };
 
@@ -156,36 +138,27 @@ const OfflineQueueModal = ({ isOpen, onClose, onQueueUpdated }) => {
                   : 'border-gray-200 bg-gray-50/50 hover:bg-gray-50'
               }`}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-800">
-                      Amount: ₦{Number(item.payload?.totalAmount || 0).toLocaleString()}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
-                      {item.payload?.payRoute || 'Cash'}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
-                      {item.payload?.items?.length || 0} item(s)
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Recorded: {new Date(item.created_at).toLocaleString()} • Attempts: {item.sync_attempts || 0}
-                  </p>
-                  {item.error_message && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 mt-2 bg-red-100/60 px-2.5 py-1.5 rounded-lg">
-                      <AlertCircle size={14} className="shrink-0" />
-                      <span>{item.error_message}</span>
-                    </div>
-                  )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-800">
+                    Amount: ₦{Number(item.payload?.totalAmount || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
+                    {item.payload?.payRoute || 'Cash'}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                    {item.payload?.items?.length || 0} item(s)
+                  </span>
                 </div>
-                <button
-                  onClick={() => handleDeleteItem('sales', item.id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                  title="Discard this queued sale"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Recorded: {new Date(item.created_at).toLocaleString()} • Attempts: {item.sync_attempts || 0}
+                </p>
+                {item.error_message && (
+                  <div className="flex items-center gap-1.5 text-xs text-red-600 mt-2 bg-red-100/60 px-2.5 py-1.5 rounded-lg">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{item.error_message}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -199,36 +172,27 @@ const OfflineQueueModal = ({ isOpen, onClose, onQueueUpdated }) => {
                   : 'border-gray-200 bg-gray-50/50 hover:bg-gray-50'
               }`}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-800">
-                      Amount: ₦{Number(item.payload?.totalAmount || 0).toLocaleString()}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                      {item.payload?.payRoute || 'Cash'}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
-                      {item.payload?.items?.length || 0} wholesale item(s)
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Recorded: {new Date(item.created_at).toLocaleString()} • Attempts: {item.sync_attempts || 0}
-                  </p>
-                  {item.error_message && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 mt-2 bg-red-100/60 px-2.5 py-1.5 rounded-lg">
-                      <AlertCircle size={14} className="shrink-0" />
-                      <span>{item.error_message}</span>
-                    </div>
-                  )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-800">
+                    Amount: ₦{Number(item.payload?.totalAmount || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                    {item.payload?.payRoute || 'Cash'}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                    {item.payload?.items?.length || 0} wholesale item(s)
+                  </span>
                 </div>
-                <button
-                  onClick={() => handleDeleteItem('wholesale', item.id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                  title="Discard this queued wholesale sale"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Recorded: {new Date(item.created_at).toLocaleString()} • Attempts: {item.sync_attempts || 0}
+                </p>
+                {item.error_message && (
+                  <div className="flex items-center gap-1.5 text-xs text-red-600 mt-2 bg-red-100/60 px-2.5 py-1.5 rounded-lg">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{item.error_message}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -117,38 +117,43 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
   useEffect(() => {
     if (!isOpen) return;
 
-    const fetchFilterData = async () => {
-      try {
-        if (navigator.onLine) {
-          const [salesRes, transRes] = await Promise.all([
-            axios.get('/api/salesPage').catch(() => ({ data: {} })),
-            axios.get('/api/transactionPage').catch(() => ({ data: {} }))
-          ]);
-          if (salesRes.data.customers) setCustomers(salesRes.data.customers);
-          if (transRes.data.users) setUsers(transRes.data.users);
-        } else {
-          const localCustomers = await db.customers.toArray().catch(() => []);
-          setCustomers(localCustomers || []);
+    if (isAdmin) {
+      const fetchFilterData = async () => {
+        try {
+          if (navigator.onLine) {
+            const [salesRes, transRes] = await Promise.all([
+              axios.get('/api/salesPage').catch(() => ({ data: {} })),
+              axios.get('/api/transactionPage').catch(() => ({ data: {} }))
+            ]);
+            if (salesRes.data.customers) setCustomers(salesRes.data.customers);
+            if (transRes.data.users) setUsers(transRes.data.users);
+          } else {
+            const localCustomers = await db.customers.toArray().catch(() => []);
+            setCustomers(localCustomers || []);
+          }
+        } catch (err) {
+          console.error('Failed to load filters', err);
         }
-      } catch (err) {
-        console.error('Failed to load filters', err);
-      }
-    };
-    fetchFilterData();
+      };
+      fetchFilterData();
 
-    const today = new Date();
-    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+      const today = new Date();
+      const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    const initialParams = {
-      startDate: todayStr,
-      endDate: todayStr,
-      customerId: '',
-      userId: '',
-    };
+      const initialParams = {
+        startDate: todayStr,
+        endDate: todayStr,
+        customerId: '',
+        userId: '',
+      };
 
-    setSearchParams(initialParams);
-    fetchWholesales(initialParams);
-  }, [isOpen]);
+      setSearchParams(initialParams);
+      fetchWholesales(initialParams);
+    } else {
+      // Non-admin: fetch only user's own last 15 wholesales
+      fetchWholesales({});
+    }
+  }, [isOpen, isAdmin]);
 
   const handleSearch = (e) => {
     if (e) e.preventDefault();
@@ -286,12 +291,16 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
               </div>
               <div>
                 <h2 className="text-lg sm:text-xl font-bold text-amber-950 flex items-center gap-2">
-                  Previous Wholesale Orders
+                  {isAdmin ? 'Previous Wholesale Orders' : 'My Recent Wholesale Orders'}
                   <span className="text-xs font-semibold px-2.5 py-0.5 bg-white text-amber-800 border border-amber-300 rounded-full">
                     {wholesales.length} {wholesales.length === 1 ? 'order' : 'orders'}
                   </span>
                 </h2>
-                <p className="text-xs text-amber-700">Audit bulk distribution sales and reprint wholesale invoices</p>
+                <p className="text-xs text-amber-700">
+                  {isAdmin
+                    ? 'Audit bulk distribution sales and reprint wholesale invoices'
+                    : 'Viewing your last 15 wholesale order entries. View item breakdown and reprint invoices'}
+                </p>
               </div>
             </div>
 
@@ -300,7 +309,7 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
                 <CSVLink
                   data={csvData}
                   headers={csvHeaders}
-                  filename={`wholesale_report_${searchParams.startDate}_to_${searchParams.endDate}.csv`}
+                  filename={isAdmin ? `wholesale_report_${searchParams.startDate}_to_${searchParams.endDate}.csv` : `my_wholesales_${new Date().toISOString().split('T')[0]}.csv`}
                   className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
                 >
                   <FileText size={14} />
@@ -319,116 +328,133 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
 
           {/* Body Content */}
           <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-            {/* Filter Controls */}
-            <form onSubmit={handleSearch} className="bg-amber-50/30 p-4 rounded-2xl border border-amber-200/80 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                    <Calendar size={13} className="text-amber-600" /> Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={searchParams.startDate}
-                    onChange={e => setSearchParams({ ...searchParams, startDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                  />
+            {/* Filter Controls (Admin) or Compact Bar (Non-Admin) */}
+            {isAdmin ? (
+              <form onSubmit={handleSearch} className="bg-amber-50/30 p-4 rounded-2xl border border-amber-200/80 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                      <Calendar size={13} className="text-amber-600" /> Start Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={searchParams.startDate}
+                      onChange={e => setSearchParams({ ...searchParams, startDate: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                      <Calendar size={13} className="text-amber-600" /> End Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={searchParams.endDate}
+                      onChange={e => setSearchParams({ ...searchParams, endDate: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                      <User size={13} className="text-amber-600" /> Customer
+                    </label>
+                    <select
+                      value={searchParams.customerId}
+                      onChange={e => setSearchParams({ ...searchParams, customerId: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    >
+                      <option value="">All Customers</option>
+                      {customers.map(c => (
+                        <option key={c.id || c.local_id} value={c.id || c.local_id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                      <CreditCard size={13} className="text-amber-600" /> Cashier / User
+                    </label>
+                    <select
+                      value={searchParams.userId}
+                      onChange={e => setSearchParams({ ...searchParams, userId: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    >
+                      <option value="">All Cashiers</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                    <Calendar size={13} className="text-amber-600" /> End Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={searchParams.endDate}
-                    onChange={e => setSearchParams({ ...searchParams, endDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                  />
-                </div>
+                {/* Quick Filter Buttons & Submit */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-200/80">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-semibold text-slate-500 mr-1">Quick Range:</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuickRange('today')}
+                      className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickRange('yesterday')}
+                      className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
+                    >
+                      Yesterday
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickRange('week')}
+                      className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
+                    >
+                      This Week
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickRange('month')}
+                      className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
+                    >
+                      This Month
+                    </button>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                    <User size={13} className="text-amber-600" /> Customer
-                  </label>
-                  <select
-                    value={searchParams.customerId}
-                    onChange={e => setSearchParams({ ...searchParams, customerId: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                  >
-                    <option value="">All Customers</option>
-                    {customers.map(c => (
-                      <option key={c.id || c.local_id} value={c.id || c.local_id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                    <CreditCard size={13} className="text-amber-600" /> Cashier / User
-                  </label>
-                  <select
-                    value={searchParams.userId}
-                    onChange={e => setSearchParams({ ...searchParams, userId: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                  >
-                    <option value="">All Cashiers</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.username}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Quick Filter Buttons & Submit */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-200/80">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-semibold text-slate-500 mr-1">Quick Range:</span>
                   <button
-                    type="button"
-                    onClick={() => setQuickRange('today')}
-                    className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
+                    type="submit"
+                    disabled={loading}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl shadow-sm transition active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickRange('yesterday')}
-                    className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
-                  >
-                    Yesterday
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickRange('week')}
-                    className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
-                  >
-                    This Week
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickRange('month')}
-                    className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg transition cursor-pointer"
-                  >
-                    This Month
+                    <Search size={14} />
+                    {loading ? 'Searching...' : 'Filter Orders'}
                   </button>
                 </div>
-
+              </form>
+            ) : (
+              <div className="flex items-center justify-between bg-amber-50/40 px-4 py-3 rounded-2xl border border-amber-200">
+                <span className="text-xs font-medium text-amber-950">
+                  Showing your last 15 recorded wholesale order entries
+                </span>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => fetchWholesales({})}
                   disabled={loading}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl shadow-sm transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
                 >
-                  <Search size={14} />
-                  {loading ? 'Searching...' : 'Filter Orders'}
+                  <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+                  {loading ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
-            </form>
+            )}
 
             {/* KPI Statistics (Admin Only) */}
             {isAdmin && (
@@ -525,7 +551,11 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
                       <tr>
                         <td colSpan="7" className="py-12 text-center text-slate-400">
                           <Boxes size={32} className="mx-auto mb-2 opacity-40 text-amber-500" />
-                          <span className="font-medium">{searched ? 'No wholesale transactions found for this filter.' : 'Search wholesale records above.'}</span>
+                          <span className="font-medium">
+                            {isAdmin
+                              ? (searched ? 'No wholesale transactions found for this filter.' : 'Search wholesale records above.')
+                              : 'No recent wholesale orders found.'}
+                          </span>
                         </td>
                       </tr>
                     ) : (

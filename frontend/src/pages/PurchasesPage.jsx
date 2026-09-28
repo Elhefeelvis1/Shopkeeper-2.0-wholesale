@@ -47,6 +47,7 @@ const PurchasesPage = () => {
         unit_cost: parseFloat(item.last_cost_price || 0),
         total_cost: '',
         unit_price: parseFloat(item.unit_selling_price || 0),
+        wholesale_price: parseFloat(item.wholesale_price || 0),
         expiry_date: ''
       }]);
       return true;
@@ -187,7 +188,7 @@ const PurchasesPage = () => {
                 <p>Select items to receive stock.</p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse min-w-[700px]">
+              <table className="w-full text-left border-collapse min-w-[850px]">
                 <thead>
                   <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
                     <th className="px-4 py-3 font-medium">Item</th>
@@ -195,6 +196,7 @@ const PurchasesPage = () => {
                     {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Total Cost</th>)}
                     {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Unit Cost</th>)}
                     {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Sell Price</th>)}
+                    {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Wholesale Price</th>)}
                     <th className="px-4 py-3 font-medium w-40">Exp Date</th>
                     {user.role === "administrator" && <th className="px-4 py-3 font-medium text-right">Total</th>}
                     <th className="px-4 py-3 font-medium text-center w-16">Act</th>
@@ -228,6 +230,14 @@ const PurchasesPage = () => {
                           <div className="flex items-center">
                             <span className="text-gray-500 mr-1">₦</span>
                             <input type="number" step="0.01" className="w-full px-2 py-1 border rounded" value={item.unit_price} onChange={(e) => updateCartItem(item.item_id, 'unit_price', e.target.value)} />
+                          </div>
+                        </td>
+                      )}
+                      {user.role === "administrator" && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center">
+                            <span className="text-gray-500 mr-1">₦</span>
+                            <input type="number" step="0.01" className="w-full px-2 py-1 border rounded" value={item.wholesale_price} onChange={(e) => updateCartItem(item.item_id, 'wholesale_price', e.target.value)} />
                           </div>
                         </td>
                       )}

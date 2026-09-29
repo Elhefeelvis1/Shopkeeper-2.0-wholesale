@@ -1239,21 +1239,28 @@ app.post("/api/searchTransactions", isAdmin, async (req, res) => {
 // Search Previous Sales
 app.post("/api/searchSales", isAuthenticated, async (req, res) => {
     const { startDate, endDate, customerId, userId } = req.body;
+    const isAdminUser = req.user && req.user.role === 'administrator';
+
     if (!startDate || !endDate) {
         return res.status(400).json({ success: false, message: 'Start date and end date are required.' });
     }
+
     try {
         const queryParts = [];
         const params = [];
         let paramCounter = 1;
 
-        queryParts.push(`s.sale_date >= $${paramCounter}::date`);
-        params.push(startDate);
-        paramCounter++;
+        if (startDate) {
+            queryParts.push(`s.sale_date >= $${paramCounter}::date`);
+            params.push(startDate);
+            paramCounter++;
+        }
 
-        queryParts.push(`s.sale_date < ($${paramCounter}::date + interval '1 day')`);
-        params.push(endDate);
-        paramCounter++;
+        if (endDate) {
+            queryParts.push(`s.sale_date < ($${paramCounter}::date + interval '1 day')`);
+            params.push(endDate);
+            paramCounter++;
+        }
 
         if (customerId && parseInt(customerId, 10) > 0) {
             queryParts.push(`s.customer_id = $${paramCounter}`);
@@ -1261,11 +1268,19 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
             paramCounter++;
         }
 
-        if (userId && parseInt(userId, 10) > 0) {
+        if (!isAdminUser) {
+            // Non-admin can only view their own sales
+            queryParts.push(`s.user_id = $${paramCounter}`);
+            params.push(req.user.id);
+            paramCounter++;
+        } else if (userId && parseInt(userId, 10) > 0) {
             queryParts.push(`s.user_id = $${paramCounter}`);
             params.push(parseInt(userId, 10));
             paramCounter++;
         }
+
+        const whereClause = queryParts.length > 0 ? `WHERE ${queryParts.join(' AND ')}` : '';
+        const limitClause = !isAdminUser ? 'LIMIT 15' : '';
 
         const salesQuery = `
             SELECT 
@@ -1284,8 +1299,9 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
             LEFT JOIN customers c ON s.customer_id = c.id
             LEFT JOIN users u ON s.user_id = u.id
             LEFT JOIN banks b ON s.bank_id = b.id
-            WHERE ${queryParts.join(' AND ')}
+            ${whereClause}
             ORDER BY s.sale_date DESC
+            ${limitClause}
         `;
         const salesResult = await db.query(salesQuery, params);
 
@@ -1293,7 +1309,6 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
             return res.json({ success: true, sales: [] });
         }
 
-        const isAdminUser = req.user && req.user.role === 'administrator';
         const saleIds = salesResult.rows.map(r => r.sale_id);
         const lineItemsQuery = `
             SELECT 
@@ -1334,22 +1349,28 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
 // Previous Wholesales
 app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
     const { startDate, endDate, customerId, userId } = req.body;
+    const isAdminUser = req.user && req.user.role === 'administrator';
+
+    if (!startDate || !endDate) {
+        return res.status(400).json({ success: false, message: 'Start date and end date are required.' });
+    }
+
     try {
         const queryParts = [];
         const params = [];
         let paramCounter = 1;
 
-        if (!startDate || !endDate) {
-            return res.status(400).json({ error: "Start date and End date are required." });
+        if (startDate) {
+            queryParts.push(`w.wholesale_date >= $${paramCounter}::date`);
+            params.push(startDate);
+            paramCounter++;
         }
 
-        queryParts.push(`w.wholesale_date >= $${paramCounter}::date`);
-        params.push(startDate);
-        paramCounter++;
-
-        queryParts.push(`w.wholesale_date < ($${paramCounter}::date + interval '1 day')`);
-        params.push(endDate);
-        paramCounter++;
+        if (endDate) {
+            queryParts.push(`w.wholesale_date < ($${paramCounter}::date + interval '1 day')`);
+            params.push(endDate);
+            paramCounter++;
+        }
 
         if (customerId && parseInt(customerId, 10) > 0) {
             queryParts.push(`w.customer_id = $${paramCounter}`);
@@ -1357,11 +1378,19 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
             paramCounter++;
         }
 
-        if (userId && parseInt(userId, 10) > 0) {
+        if (!isAdminUser) {
+            // Non-admin can only view their own wholesales
+            queryParts.push(`w.user_id = $${paramCounter}`);
+            params.push(req.user.id);
+            paramCounter++;
+        } else if (userId && parseInt(userId, 10) > 0) {
             queryParts.push(`w.user_id = $${paramCounter}`);
             params.push(parseInt(userId, 10));
             paramCounter++;
         }
+
+        const whereClause = queryParts.length > 0 ? `WHERE ${queryParts.join(' AND ')}` : '';
+        const limitClause = !isAdminUser ? 'LIMIT 15' : '';
 
         const wholesaleQuery = `
             SELECT 
@@ -1380,8 +1409,9 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
             LEFT JOIN customers c ON w.customer_id = c.id
             LEFT JOIN users u ON w.user_id = u.id
             LEFT JOIN banks b ON w.bank_id = b.id
-            WHERE ${queryParts.join(' AND ')}
+            ${whereClause}
             ORDER BY w.wholesale_date DESC
+            ${limitClause}
         `;
         const wholesaleResult = await db.query(wholesaleQuery, params);
 
@@ -1389,7 +1419,6 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
             return res.json({ success: true, wholesales: [] });
         }
 
-        const isAdminUser = req.user && req.user.role === 'administrator';
         const wholesaleIds = wholesaleResult.rows.map(r => r.wholesale_id);
         const lineItemsQuery = `
             SELECT 

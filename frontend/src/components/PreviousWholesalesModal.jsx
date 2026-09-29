@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { X, Search, Calendar, FileText, ChevronDown, ChevronUp, DollarSign, TrendingUp, Percent, Boxes, User, CreditCard, Printer, RefreshCw, WifiOff } from 'lucide-react';
 import { CSVLink } from 'react-csv';
 import WholesaleReceipt from './WholesaleReceipt';
 import { db } from '../db/dexieDb';
+import { UserContext } from '../context/UserContext';
 
-const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
+const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) => {
+  const { user: contextUser } = useContext(UserContext) || {};
+  const user = propUser || contextUser;
+
   const [searchParams, setSearchParams] = useState({
     startDate: '',
     endDate: '',
@@ -117,6 +121,18 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
   useEffect(() => {
     if (!isOpen) return;
 
+    const today = new Date();
+    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const initialParams = {
+      startDate: todayStr,
+      endDate: todayStr,
+      customerId: '',
+      userId: '',
+    };
+
+    setSearchParams(initialParams);
+
     if (isAdmin) {
       const fetchFilterData = async () => {
         try {
@@ -136,23 +152,9 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
         }
       };
       fetchFilterData();
-
-      const today = new Date();
-      const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-
-      const initialParams = {
-        startDate: todayStr,
-        endDate: todayStr,
-        customerId: '',
-        userId: '',
-      };
-
-      setSearchParams(initialParams);
-      fetchWholesales(initialParams);
-    } else {
-      // Non-admin: fetch only user's own last 15 wholesales
-      fetchWholesales({});
     }
+
+    fetchWholesales(initialParams);
   }, [isOpen, isAdmin]);
 
   const handleSearch = (e) => {
@@ -299,7 +301,7 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
                 <p className="text-xs text-amber-700">
                   {isAdmin
                     ? 'Audit bulk distribution sales and reprint wholesale invoices'
-                    : 'Viewing your last 15 wholesale order entries. View item breakdown and reprint invoices'}
+                    : "Viewing today's wholesale order entries. View item breakdown and reprint invoices"}
                 </p>
               </div>
             </div>
@@ -442,11 +444,17 @@ const PreviousWholesalesModal = ({ isOpen, onClose, shopDetails, user }) => {
             ) : (
               <div className="flex items-center justify-between bg-amber-50/40 px-4 py-3 rounded-2xl border border-amber-200">
                 <span className="text-xs font-medium text-amber-950">
-                  Showing your last 15 recorded wholesale order entries
+                  Showing today's recorded wholesale order entries
                 </span>
                 <button
                   type="button"
-                  onClick={() => fetchWholesales({})}
+                  onClick={() => {
+                    const today = new Date();
+                    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                    const params = { ...searchParams, startDate: todayStr, endDate: todayStr };
+                    setSearchParams(params);
+                    fetchWholesales(params);
+                  }}
                   disabled={loading}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
                 >

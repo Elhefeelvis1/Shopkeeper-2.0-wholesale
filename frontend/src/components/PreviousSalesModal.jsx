@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { X, Search, Calendar, FileText, ChevronDown, ChevronUp, DollarSign, TrendingUp, Percent, ShoppingBag, User, CreditCard, Printer, RefreshCw, WifiOff, AlertCircle } from 'lucide-react';
 import { CSVLink } from 'react-csv';
 import Receipt from './Receipt';
 import { db } from '../db/dexieDb';
+import { UserContext } from '../context/UserContext';
 
-const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user }) => {
+const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) => {
+  const { user: contextUser } = useContext(UserContext) || {};
+  const user = propUser || contextUser;
+
   const [searchParams, setSearchParams] = useState({
     startDate: '',
     endDate: '',
@@ -117,6 +121,18 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user }) => {
   useEffect(() => {
     if (!isOpen) return;
 
+    const today = new Date();
+    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const initialParams = {
+      startDate: todayStr,
+      endDate: todayStr,
+      customerId: '',
+      userId: '',
+    };
+
+    setSearchParams(initialParams);
+
     if (isAdmin) {
       const fetchFilterData = async () => {
         try {
@@ -137,23 +153,9 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user }) => {
         }
       };
       fetchFilterData();
-
-      const today = new Date();
-      const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-
-      const initialParams = {
-        startDate: todayStr,
-        endDate: todayStr,
-        customerId: '',
-        userId: '',
-      };
-
-      setSearchParams(initialParams);
-      fetchSales(initialParams);
-    } else {
-      // Non-admin: fetch only user's own last 15 sales
-      fetchSales({});
     }
+
+    fetchSales(initialParams);
   }, [isOpen, isAdmin]);
 
   const handleSearch = (e) => {
@@ -286,7 +288,7 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user }) => {
                 <p className="text-xs text-gray-500">
                   {isAdmin
                     ? 'Audit sales records, view item breakdown, and reprint receipts'
-                    : 'Viewing your last 15 sales entries. View item breakdown and reprint receipts'}
+                    : "Viewing today's sales entries. View item breakdown and reprint receipts"}
                 </p>
               </div>
             </div>
@@ -429,11 +431,17 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user }) => {
             ) : (
               <div className="flex items-center justify-between bg-indigo-50/40 px-4 py-3 rounded-2xl border border-indigo-100">
                 <span className="text-xs font-medium text-gray-700">
-                  Showing your last 15 recorded sales entries
+                  Showing today's recorded sales entries
                 </span>
                 <button
                   type="button"
-                  onClick={() => fetchSales({})}
+                  onClick={() => {
+                    const today = new Date();
+                    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                    const params = { ...searchParams, startDate: todayStr, endDate: todayStr };
+                    setSearchParams(params);
+                    fetchSales(params);
+                  }}
                   disabled={loading}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
                 >

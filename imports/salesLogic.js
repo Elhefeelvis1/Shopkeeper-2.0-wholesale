@@ -38,7 +38,7 @@ export async function searchDb(name, category, startPrice, stopPrice, db){
         console.warn(`searchDb: Invalid stopPrice input ignored: ${stopPrice}`);
     }
 
-    let sqlQuery = 'SELECT ast.id AS item_id, ast.barcode, ast.name AS item_name, ast.unit_selling_price, ast.total_quantity_in_stock, ast.last_cost_price, categories.name AS category_name, units.name AS unit_name FROM all_stocks ast JOIN units ON ast.unit_id = units.id JOIN categories ON ast.category_id = categories.id';
+    let sqlQuery = 'SELECT ast.id AS item_id, ast.barcode, ast.name AS item_name, ast.unit_selling_price, ast.wholesale_price, ast.total_quantity_in_stock, ast.last_cost_price, categories.name AS category_name, units.name AS unit_name FROM all_stocks ast JOIN units ON ast.unit_id = units.id JOIN categories ON ast.category_id = categories.id';
 
     if (queryParts.length > 0) {
         sqlQuery += ' WHERE ' + queryParts.join(' AND ');

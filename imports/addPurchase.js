@@ -24,10 +24,11 @@ export default async function savePurchase(userId, purchaseData, db, res) {
 
         // 3. Loop through items
         for (const item of items) {
-            const { item_id: productId, item_name: itemName, quantity: rawQty, unit_cost: rawUnitCost, unit_price: rawUnitSellPrice, expiry_date: expiryDate } = item;
+            const { item_id: productId, item_name: itemName, quantity: rawQty, unit_cost: rawUnitCost, unit_price: rawUnitSellPrice, wholesale_price: rawWholesalePrice, expiry_date: expiryDate } = item;
             const quantity = parseFloat(rawQty) || 0;
             const unitCost = parseFloat(rawUnitCost) || 0;
             const unitSellPrice = parseFloat(rawUnitSellPrice) || 0;
+            const wholesalePrice = parseFloat(rawWholesalePrice) || 0;
             const displayName = itemName || `Product ID: ${productId}`;
 
             // Strict Validation
@@ -96,13 +97,26 @@ export default async function savePurchase(userId, purchaseData, db, res) {
             });
 
             // F. Update Product Metadata (Prices)
-            await db.query(
-                `UPDATE all_stocks SET 
-                    last_updated_date = NOW(),
-                    unit_selling_price = $1 
-                WHERE id = $2;`,
-                [unitSellPrice, productId]
-            );
+            if (rawWholesalePrice !== undefined && rawWholesalePrice !== null && rawWholesalePrice !== '') {
+                await db.query(
+                    `UPDATE all_stocks SET 
+                        last_updated_date = NOW(),
+                        last_cost_price = $1,
+                        unit_selling_price = $2,
+                        wholesale_price = $3
+                    WHERE id = $4;`,
+                    [unitCost, unitSellPrice, wholesalePrice, productId]
+                );
+            } else {
+                await db.query(
+                    `UPDATE all_stocks SET 
+                        last_updated_date = NOW(),
+                        last_cost_price = $1,
+                        unit_selling_price = $2 
+                    WHERE id = $3;`,
+                    [unitCost, unitSellPrice, productId]
+                );
+            }
         }
 
         // 4. Update Header Total

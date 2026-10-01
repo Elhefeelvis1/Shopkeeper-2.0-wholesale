@@ -759,7 +759,7 @@ app.get("/api/track-product", isAdmin, async (req, res) => {
 // Fetch all stocks
 app.get("/api/all-inventory", isAdmin, async (req, res) => {
     try {
-        const { page = 1, limit = 10, search = '', filter = '' } = req.query;
+        const { page = 1, limit = 50, search = '', filter = '' } = req.query;
         const limitVal = limit === 'all' ? null : parseInt(limit);
         const offset = limit === 'all' ? 0 : (parseInt(page) - 1) * limitVal;
 
@@ -865,8 +865,8 @@ app.delete("/api/delete-item/:id", isAdmin, async (req, res) => {
 
 // Add Stock Item
 app.post("/api/addStock", isAdmin, async (req, res) => {
-    const { 
-        name, genericName, barcode, category, company, unit, cost, price, 
+    const {
+        name, genericName, barcode, category, company, unit, cost, price,
         reorderLevel, description, quantity,
         wholesalePrice, wholesaleUnit, wholesaleMultiplier,
         wholesale_price, wholesale_unit, wholesale_multiplier
@@ -949,8 +949,8 @@ app.post("/api/addStock", isAdmin, async (req, res) => {
 
 // Update Stock Item
 app.put("/api/update-item", isAdmin, async (req, res) => {
-    const { 
-        id, name, genericName, barcode, category, company, unit, cost, price, 
+    const {
+        id, name, genericName, barcode, category, company, unit, cost, price,
         reorderLevel, description, quantity,
         wholesalePrice, wholesaleUnit, wholesaleMultiplier,
         wholesale_price, wholesale_unit, wholesale_multiplier

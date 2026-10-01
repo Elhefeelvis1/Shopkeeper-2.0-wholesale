@@ -34,7 +34,7 @@ const InternalUpdatesPage = () => {
       setIsSearching(true);
       try {
         const res = await axios.get('/api/all-inventory', {
-          params: { page, limit: 10, search: searchQuery }
+          params: { page, limit: 50, search: searchQuery }
         });
         const items = (res.data.contents || []).map(item => ({
           ...item,
@@ -48,7 +48,7 @@ const InternalUpdatesPage = () => {
         } else {
           setSearchResults(prev => [...prev, ...items]);
         }
-        setTotalPages(Math.ceil((res.data.totalCount || 0) / 10));
+        setTotalPages(Math.ceil((res.data.totalCount || 0) / 50));
       } catch (err) {
         if (page === 1) setSearchResults([]);
       } finally {

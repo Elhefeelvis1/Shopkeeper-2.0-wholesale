@@ -42,7 +42,7 @@ const StockPage = () => {
     else setLoadingMore(true);
 
     try {
-      const limit = 10;
+      const limit = 50;
       const res = await axios.get('/api/all-inventory', {
         params: { page: pageNumber, limit, search: searchQuery, filter: tab === 'all' ? '' : tab }
       }).catch(() => ({ data: { contents: [], totalCount: 0 } }));

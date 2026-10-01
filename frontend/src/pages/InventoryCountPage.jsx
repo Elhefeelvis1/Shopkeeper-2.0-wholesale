@@ -43,14 +43,14 @@ const InventoryCountPage = () => {
   const fetchInventory = async () => {
     try {
       const res = await axios.get('/api/all-inventory', {
-        params: { page, limit: 10, search: searchQuery }
+        params: { page, limit: 50, search: searchQuery }
       });
       if (page === 1) {
         setInventory(res.data.contents || []);
       } else {
         setInventory(prev => [...prev, ...(res.data.contents || [])]);
       }
-      setTotalPages(Math.ceil((res.data.totalCount || 0) / 10));
+      setTotalPages(Math.ceil((res.data.totalCount || 0) / 50));
     } catch (err) {
       console.error(err);
     }

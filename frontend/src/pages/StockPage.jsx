@@ -184,10 +184,11 @@ const StockPage = () => {
     try {
       if (ItemOnEdit) {
         const response = await axios.delete(`/api/delete-item/${ItemOnEdit.id}`);
+        setInventory(prev => prev.filter(item => item.id !== ItemOnEdit.id));
+        setTotalItems(prev => Math.max(0, prev - 1));
         setShowDeleteModal(false);
         closeModal();
         showToast('success', response.data.message || 'Product deleted successfully!');
-        fetchData();
       }
     } catch (err) {
       console.error(err);
@@ -204,13 +205,59 @@ const StockPage = () => {
     try {
       if (ItemOnEdit) {
         const response = await axios.put('/api/update-item', { id: ItemOnEdit.id, ...formData });
+        
+        setInventory(prev => prev.map(item => {
+          if (item.id === ItemOnEdit.id) {
+            return {
+              ...item,
+              name: formData.name,
+              generic_name: formData.genericName,
+              barcode: formData.barcode,
+              category: formData.category,
+              company: formData.company,
+              unit: formData.unit,
+              last_cost_price: formData.cost,
+              unit_selling_price: formData.price,
+              reorder_level: formData.reorderLevel,
+              description: formData.description,
+              total_quantity_in_stock: formData.quantity !== '' ? Number(formData.quantity) : item.total_quantity_in_stock,
+              wholesale_price: formData.wholesalePrice,
+              wholesale_unit: formData.wholesaleUnit,
+              wholesale_multiplier: formData.wholesaleMultiplier || 1
+            };
+          }
+          return item;
+        }));
+
         showToast('success', response.data.message || 'Product updated successfully!');
       } else {
         const response = await axios.post('/api/addStock', formData);
+        const createdId = response.data?.item?.id || response.data?.id || Date.now();
+
+        const newItem = {
+          id: createdId,
+          name: formData.name,
+          generic_name: formData.genericName,
+          barcode: formData.barcode,
+          category: formData.category,
+          company: formData.company,
+          unit: formData.unit,
+          last_cost_price: formData.cost,
+          unit_selling_price: formData.price,
+          reorder_level: formData.reorderLevel,
+          description: formData.description,
+          total_quantity_in_stock: Number(formData.quantity) || 0,
+          wholesale_price: formData.wholesalePrice,
+          wholesale_unit: formData.wholesaleUnit,
+          wholesale_multiplier: formData.wholesaleMultiplier || 1
+        };
+
+        setInventory(prev => [newItem, ...prev]);
+        setTotalItems(prev => prev + 1);
+
         showToast('success', response.data.message || 'Product saved successfully!');
       }
       closeModal();
-      fetchData();
     } catch (err) {
       console.error(err);
       showToast('error', err.response?.data?.message || (ItemOnEdit ? 'Failed to update product' : 'Failed to save product'));

@@ -756,99 +756,7 @@ app.get("/api/track-product", isAdmin, async (req, res) => {
     }
 });
 
-// Fetch all stocks (commented out)
-// app.get("/api/all-inventory", isAdmin, async (req, res) => {
-//     try {
-//         const { page = 1, limit = 50, search = '', filter = '' } = req.query;
-//         const limitVal = limit === 'all' ? null : parseInt(limit);
-//         const offset = limit === 'all' ? 0 : (parseInt(page) - 1) * limitVal;
-
-//         let queryParams = [];
-//         let countParams = [];
-//         let whereConditions = [];
-
-//         if (search) {
-//             whereConditions.push(`(ast.name ILIKE $1 OR ctg.name ILIKE $1 OR ast.generic_name ILIKE $1 OR ast.barcode ILIKE $1)`);
-//             queryParams.push(`%${search}%`);
-//             countParams.push(`%${search}%`);
-//         }
-
-//         if (filter === 'reorder') {
-//             whereConditions.push(`ast.total_quantity_in_stock <= ast.reorder_level AND ast.total_quantity_in_stock > 0`);
-//         } else if (filter === 'zero') {
-//             whereConditions.push(`ast.total_quantity_in_stock = 0`);
-//         }
-
-//         let whereClause = whereConditions.length > 0 ? "WHERE " + whereConditions.join(" AND ") : "";
-
-//         const countQuery = `
-//             SELECT COUNT(*) 
-//             FROM all_stocks ast
-//             LEFT JOIN categories ctg ON ast.category_id = ctg.id
-//             ${whereClause}
-//         `;
-
-//         let queryText = `
-//             SELECT 
-//                 ast.id,
-//                 ast.barcode,
-//                 ast.name,
-//                 ast.generic_name,
-//                 ast.last_cost_price,
-//                 ast.unit_selling_price,
-//                 ast.wholesale_price,
-//                 ast.wholesale_unit_id,
-//                 wu.name AS wholesale_unit,
-//                 COALESCE(ast.wholesale_multiplier, 1) AS wholesale_multiplier,
-//                 units.name AS unit,
-//                 ctg.name AS category,
-//                 cmp.name AS company,
-//                 ast.reorder_level,
-//                 ast.description,
-//                 ast.total_quantity_in_stock,
-//                 ast.entry_date,
-//                 ast.last_updated_date
-//             FROM all_stocks ast
-//             LEFT JOIN units ON ast.unit_id = units.id
-//             LEFT JOIN wholesale_units wu ON ast.wholesale_unit_id = wu.id
-//             LEFT JOIN categories ctg ON ast.category_id = ctg.id
-//             LEFT JOIN companies cmp ON ast.company_id = cmp.id
-//             ${whereClause}
-//             ORDER BY ast.name ASC
-//         `;
-
-//         if (limitVal !== null) {
-//             queryParams.push(limitVal);
-//             queryText += ` LIMIT $${queryParams.length}`;
-
-//             queryParams.push(offset);
-//             queryText += ` OFFSET $${queryParams.length}`;
-//         }
-
-//         const [countResult, result] = await Promise.all([
-//             db.query(countQuery, countParams),
-//             db.query(queryText, queryParams)
-//         ]);
-
-//         const inventory = result.rows;
-//         const totalCount = parseInt(countResult.rows[0].count, 10);
-
-//         res.json({
-//             success: true,
-//             message: inventory.length > 0 ? `${inventory.length} items(s) found!` : "No inventory items found.",
-//             contents: inventory,
-//             totalCount: totalCount
-//         });
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: `Couldn't retrieve data: ${error.message}`,
-//             error: error.message
-//         });
-//     }
-// });
-
-// Fetch stocks filtered from S to T inclusive
+// Fetch all stocks
 app.get("/api/all-inventory", isAdmin, async (req, res) => {
     try {
         const { page = 1, limit = 50, search = '', filter = '' } = req.query;
@@ -857,10 +765,10 @@ app.get("/api/all-inventory", isAdmin, async (req, res) => {
 
         let queryParams = [];
         let countParams = [];
-        let whereConditions = ["(ast.name ILIKE 's%' OR ast.name ILIKE 't%')"];
+        let whereConditions = [];
 
         if (search) {
-            whereConditions.push(`(ast.name ILIKE $${queryParams.length + 1} OR ctg.name ILIKE $${queryParams.length + 1} OR ast.generic_name ILIKE $${queryParams.length + 1} OR ast.barcode ILIKE $${queryParams.length + 1})`);
+            whereConditions.push(`(ast.name ILIKE $1 OR ctg.name ILIKE $1 OR ast.generic_name ILIKE $1 OR ast.barcode ILIKE $1)`);
             queryParams.push(`%${search}%`);
             countParams.push(`%${search}%`);
         }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Plus, Trash2, ShoppingCart, Truck } from 'lucide-react';
 import ProductSearch from '../components/ProductSearch';
@@ -8,9 +8,16 @@ import { useToast } from '../context/ToastContext';
 
 const PurchasesPage = () => {
   const { showToast } = useToast();
-  const { user } = useOutletContext();
+  const { user } = useOutletContext() || {};
+  const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+
+  useEffect(() => {
+    if (user && user.role !== 'administrator' && !user?.permissions?.can_purchase) {
+      navigate('/home');
+    }
+  }, [user, navigate]);
 
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });

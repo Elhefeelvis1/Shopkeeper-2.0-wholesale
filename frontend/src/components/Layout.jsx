@@ -86,7 +86,12 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
 
           {navItems.filter(item => {
             if (user?.role === 'administrator') return true;
-            return item.path === '/sales' || item.path === '/purchases' || item.path === '/wholesale';
+            const perms = user?.permissions || {};
+            if (item.path === '/sales') return true;
+            if (item.path === '/purchases') return Boolean(perms.can_purchase);
+            if (item.path === '/wholesale') return Boolean(perms.can_view_wholesale);
+            if (item.path === '/transactions') return Boolean(perms.can_audit);
+            return false;
           }).map((item) => (
             <Link
               key={item.name}

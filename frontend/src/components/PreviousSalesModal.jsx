@@ -27,6 +27,7 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) =>
   const [receiptData, setReceiptData] = useState(null);
 
   const isAdmin = user?.role === 'administrator';
+  const canAudit = isAdmin || Boolean(user?.permissions?.can_audit);
   const showProfit = isAdmin;
 
   const formatMoney = (amount) => {
@@ -133,7 +134,7 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) =>
 
     setSearchParams(initialParams);
 
-    if (isAdmin) {
+    if (canAudit) {
       const fetchFilterData = async () => {
         try {
           if (navigator.onLine) {
@@ -156,7 +157,7 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) =>
     }
 
     fetchSales(initialParams);
-  }, [isOpen, isAdmin]);
+  }, [isOpen, canAudit]);
 
   const handleSearch = (e) => {
     if (e) e.preventDefault();
@@ -280,13 +281,13 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) =>
               </div>
               <div>
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                  {isAdmin ? 'Previous Sales' : 'My Recent Sales'}
+                  {canAudit ? 'Previous Sales' : 'My Recent Sales'}
                   <span className="text-xs font-semibold px-2.5 py-0.5 bg-white text-indigo-800 border border-indigo-200 rounded-full">
                     {sales.length} {sales.length === 1 ? 'sale' : 'sales'}
                   </span>
                 </h2>
                 <p className="text-xs text-gray-500">
-                  {isAdmin
+                  {canAudit
                     ? 'Audit sales records, view item breakdown, and reprint receipts'
                     : "Viewing today's sales entries. View item breakdown and reprint receipts"}
                 </p>
@@ -298,7 +299,7 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) =>
                 <CSVLink
                   data={csvData}
                   headers={csvHeaders}
-                  filename={isAdmin ? `sales_report_${searchParams.startDate}_to_${searchParams.endDate}.csv` : `my_sales_${new Date().toISOString().split('T')[0]}.csv`}
+                  filename={canAudit ? `sales_report_${searchParams.startDate}_to_${searchParams.endDate}.csv` : `my_sales_${new Date().toISOString().split('T')[0]}.csv`}
                   className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
                 >
                   <FileText size={14} />
@@ -317,8 +318,8 @@ const PreviousSalesModal = ({ isOpen, onClose, shopDetails, user: propUser }) =>
 
           {/* Body Content */}
           <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-            {/* Filter Controls (Admin) or Compact Bar (Non-Admin) */}
-            {isAdmin ? (
+            {/* Filter Controls (Auditor/Admin) or Compact Bar (Sales Rep) */}
+            {canAudit ? (
               <form onSubmit={handleSearch} className="bg-indigo-50/40 p-4 rounded-2xl border border-indigo-100 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>

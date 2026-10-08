@@ -22,6 +22,15 @@ const WholesalePage = () => {
   const { user } = useOutletContext() || {};
   const isSubmittingRef = useRef(false);
 
+  const isAdmin = user?.role === 'administrator';
+  const canDiscount = isAdmin || Boolean(user?.permissions?.can_discount);
+
+  useEffect(() => {
+    if (user && user.role !== 'administrator' && !user?.permissions?.can_view_wholesale) {
+      navigate('/sales');
+    }
+  }, [user, navigate]);
+
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -544,39 +553,41 @@ const WholesalePage = () => {
               </div>
 
               {/* Discount inputs */}
-              <div className="pt-2 border-t border-slate-100 space-y-2">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Discount (Optional)
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="relative">
-                    <input
-                      type="number"
-                      placeholder="Percent %"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500"
-                      value={discountPercent}
-                      onChange={(e) => {
-                        setDiscountPercent(e.target.value);
-                        setDiscountValue('');
-                      }}
-                    />
-                    <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold">%</span>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      placeholder="Fixed ₦"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500"
-                      value={discountValue}
-                      onChange={(e) => {
-                        setDiscountValue(e.target.value);
-                        setDiscountPercent('');
-                      }}
-                    />
-                    <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold">₦</span>
+              {canDiscount && (
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Discount (Optional)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Percent %"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500"
+                        value={discountPercent}
+                        onChange={(e) => {
+                          setDiscountPercent(e.target.value);
+                          setDiscountValue('');
+                        }}
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold">%</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Fixed ₦"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500"
+                        value={discountValue}
+                        onChange={(e) => {
+                          setDiscountValue(e.target.value);
+                          setDiscountPercent('');
+                        }}
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold">₦</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {discountAmount > 0 && (
                 <div className="flex justify-between text-red-600 font-medium text-xs">

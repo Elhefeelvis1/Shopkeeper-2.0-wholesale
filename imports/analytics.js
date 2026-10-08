@@ -11,8 +11,9 @@ export async function getMainMetrics(startDate, endDate, db) {
         const totalSales = parseFloat(salesRes.rows[0].total_sales);
 
         // Total COGS and Items Sold
+        // Note: sli.cost_at_sale already stores (quantity_sold * costPerUnit) for the line item
         const cogsRes = await db.query(`
-            SELECT COALESCE(SUM(sli.quantity_sold * sli.cost_at_sale), 0) AS total_cogs,
+            SELECT COALESCE(SUM(sli.cost_at_sale), 0) AS total_cogs,
                    COALESCE(SUM(sli.quantity_sold), 0) AS items_sold
             FROM sale_line_items sli
             JOIN sales s ON sli.sale_id = s.id
@@ -96,23 +97,36 @@ export async function getMainMetrics(startDate, endDate, db) {
 export async function getStaffPerformance(staffId, startDate, endDate, db) {
     try {
         const values = [startDate, endDate];
-        let queryCondition = `WHERE s.sale_date >= $1::date AND s.sale_date < ($2::date + interval '1 day')`;
+        let salesFilter = `WHERE s.sale_date >= $1::date AND s.sale_date < ($2::date + interval '1 day')`;
         if (staffId) {
             values.push(staffId);
-            queryCondition += ` AND s.user_id = $3`;
+            salesFilter += ` AND s.user_id = $3`;
         }
 
         const metricsRes = await db.query(`
             SELECT u.id, u.username,
-                   COALESCE(SUM(s.total_amount), 0) AS total_sales,
-                   COUNT(DISTINCT s.id) AS total_transactions,
-                   COALESCE(SUM(sli.quantity_sold), 0) AS items_sold,
-                   COALESCE(SUM(s.total_amount) - SUM(sli.quantity_sold * sli.cost_at_sale), 0) AS profit_generated
-            FROM sales s
-            JOIN users u ON s.user_id = u.id
-            LEFT JOIN sale_line_items sli ON s.id = sli.sale_id
-            ${queryCondition}
-            GROUP BY u.id, u.username
+                   COALESCE(sales_summary.total_sales, 0) AS total_sales,
+                   COALESCE(sales_summary.total_transactions, 0) AS total_transactions,
+                   COALESCE(items_summary.items_sold, 0) AS items_sold,
+                   COALESCE(sales_summary.total_sales - COALESCE(items_summary.total_cogs, 0), 0) AS profit_generated
+            FROM users u
+            JOIN (
+                SELECT s.user_id,
+                       SUM(s.total_amount) AS total_sales,
+                       COUNT(s.id) AS total_transactions
+                FROM sales s
+                ${salesFilter}
+                GROUP BY s.user_id
+            ) sales_summary ON u.id = sales_summary.user_id
+            LEFT JOIN (
+                SELECT s.user_id,
+                       SUM(sli.quantity_sold) AS items_sold,
+                       SUM(sli.cost_at_sale) AS total_cogs
+                FROM sale_line_items sli
+                JOIN sales s ON sli.sale_id = s.id
+                ${salesFilter}
+                GROUP BY s.user_id
+            ) items_summary ON u.id = items_summary.user_id
             ORDER BY total_sales DESC
         `, values);
 
@@ -126,32 +140,47 @@ export async function getStaffPerformance(staffId, startDate, endDate, db) {
 export async function getCustomersAnalytics(searchQuery, offset, limit, startDate, endDate, db) {
     try {
         const values = [limit, offset];
-        let paramCount = 3;
-        let searchCondition = "";
+        let paramIndex = 3;
         
-        if (searchQuery) {
-            values.push(`%${searchQuery}%`);
-            searchCondition = `WHERE c.name ILIKE $${paramCount} OR c.phone_number::text ILIKE $${paramCount}`;
-            paramCount++;
-        }
-        
-        let dateConditionSales = "";
+        let dateFilterSales = "";
         if (startDate && endDate) {
             values.push(startDate, endDate);
-            dateConditionSales = ` AND s.sale_date >= $${paramCount}::date AND s.sale_date < ($${paramCount + 1}::date + interval '1 day')`;
+            dateFilterSales = `WHERE s.sale_date >= $${paramIndex}::date AND s.sale_date < ($${paramIndex + 1}::date + interval '1 day')`;
+            paramIndex += 2;
+        }
+
+        let searchCondition = "";
+        if (searchQuery) {
+            values.push(`%${searchQuery}%`);
+            searchCondition = `WHERE c.name ILIKE $${paramIndex} OR c.phone_number::text ILIKE $${paramIndex}`;
+            paramIndex++;
         }
 
         const query = `
             SELECT c.id, c.name, c.phone_number, c.email,
-                   COALESCE(SUM(s.total_amount), 0) AS amount_spent,
-                   COALESCE(SUM(s.discount_applied), 0) AS total_discounts,
-                   COALESCE(SUM(sli.quantity_sold), 0) AS items_bought,
-                   COUNT(DISTINCT s.id) AS total_transactions
+                   COALESCE(s_summary.amount_spent, 0) AS amount_spent,
+                   COALESCE(s_summary.total_discounts, 0) AS total_discounts,
+                   COALESCE(sli_summary.items_bought, 0) AS items_bought,
+                   COALESCE(s_summary.total_transactions, 0) AS total_transactions
             FROM customers c
-            LEFT JOIN sales s ON c.id = s.customer_id ${dateConditionSales}
-            LEFT JOIN sale_line_items sli ON s.id = sli.sale_id
+            LEFT JOIN (
+                SELECT s.customer_id,
+                       SUM(s.total_amount) AS amount_spent,
+                       SUM(s.discount_applied) AS total_discounts,
+                       COUNT(s.id) AS total_transactions
+                FROM sales s
+                ${dateFilterSales}
+                GROUP BY s.customer_id
+            ) s_summary ON c.id = s_summary.customer_id
+            LEFT JOIN (
+                SELECT s.customer_id,
+                       SUM(sli.quantity_sold) AS items_bought
+                FROM sale_line_items sli
+                JOIN sales s ON sli.sale_id = s.id
+                ${dateFilterSales}
+                GROUP BY s.customer_id
+            ) sli_summary ON c.id = sli_summary.customer_id
             ${searchCondition}
-            GROUP BY c.id, c.name, c.phone_number, c.email
             ORDER BY c.name ASC
             LIMIT $1 OFFSET $2
         `;

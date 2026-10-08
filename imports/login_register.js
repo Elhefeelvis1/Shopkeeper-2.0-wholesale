@@ -2,8 +2,19 @@ import bcrypt from 'bcrypt';
 
 const saltRounds = 5;
 
-export async function registerUser(username, password, role, db) {
+export async function registerUser(username, password, role, db, permissions = null) {
     if (username) username = username.toLowerCase();
+
+    const defaultPermissions = {
+        can_audit: false,
+        can_purchase: false,
+        can_discount: false,
+        can_view_wholesale: true
+    };
+
+    const userPermissions = permissions && typeof permissions === 'object' 
+        ? JSON.stringify({ ...defaultPermissions, ...permissions }) 
+        : JSON.stringify(defaultPermissions);
 
     try {
         const user = await db.query("SELECT * FROM users WHERE username = $1", [username]);
@@ -12,8 +23,8 @@ export async function registerUser(username, password, role, db) {
         } else {
             // Password Hashing
             const hash = await bcrypt.hash(password, saltRounds);
-            const result = await db.query("INSERT INTO users (username, password, role) VALUES ($1, $2, $3)", [
-                username, hash, role
+            const result = await db.query("INSERT INTO users (username, password, role, permissions) VALUES ($1, $2, $3, $4)", [
+                username, hash, role, userPermissions
             ]);
             return result;
         }

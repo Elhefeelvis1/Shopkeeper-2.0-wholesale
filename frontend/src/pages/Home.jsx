@@ -1,10 +1,15 @@
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { ShoppingCart, ArrowRightLeft } from 'lucide-react';
+import { ShoppingCart, ArrowRightLeft, Boxes } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
 const Home = () => {
-  const { user } = useOutletContext();
+  const { user } = useOutletContext() || {};
   const navigate = useNavigate();
+
+  const isAdmin = user?.role === 'administrator';
+  const perms = user?.permissions || {};
+  const canPurchase = isAdmin || Boolean(perms.can_purchase);
+  const canWholesale = isAdmin || Boolean(perms.can_view_wholesale);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] py-6">
@@ -16,7 +21,7 @@ const Home = () => {
           <p className="text-sm sm:text-lg text-gray-500">Select a portal to continue</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full justify-center items-center max-w-md sm:max-w-none">
+        <div className="flex flex-wrap gap-4 sm:gap-6 w-full justify-center items-center max-w-4xl">
           <button
             onClick={() => navigate('/sales')}
             className="w-full sm:w-64 flex flex-col items-center gap-4 p-6 sm:p-8 bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg hover:border-indigo-100 transition group cursor-pointer"
@@ -27,15 +32,29 @@ const Home = () => {
             <span className="text-lg sm:text-xl font-bold text-gray-800">Sales Portal</span>
           </button>
 
-          <button
-            onClick={() => navigate('/purchases')}
-            className="w-full sm:w-64 flex flex-col items-center gap-4 p-6 sm:p-8 bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg hover:border-emerald-100 transition group cursor-pointer"
-          >
-            <div className="p-4 sm:p-5 bg-emerald-50 text-emerald-600 rounded-full group-hover:scale-110 transition-transform">
-              <ArrowRightLeft size={40} className="sm:w-12 sm:h-12" />
-            </div>
-            <span className="text-lg sm:text-xl font-bold text-gray-800">Purchases Portal</span>
-          </button>
+          {canWholesale && (
+            <button
+              onClick={() => navigate('/wholesale')}
+              className="w-full sm:w-64 flex flex-col items-center gap-4 p-6 sm:p-8 bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg hover:border-teal-100 transition group cursor-pointer"
+            >
+              <div className="p-4 sm:p-5 bg-teal-50 text-teal-600 rounded-full group-hover:scale-110 transition-transform">
+                <Boxes size={40} className="sm:w-12 sm:h-12" />
+              </div>
+              <span className="text-lg sm:text-xl font-bold text-gray-800">Wholesale Portal</span>
+            </button>
+          )}
+
+          {canPurchase && (
+            <button
+              onClick={() => navigate('/purchases')}
+              className="w-full sm:w-64 flex flex-col items-center gap-4 p-6 sm:p-8 bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg hover:border-emerald-100 transition group cursor-pointer"
+            >
+              <div className="p-4 sm:p-5 bg-emerald-50 text-emerald-600 rounded-full group-hover:scale-110 transition-transform">
+                <ArrowRightLeft size={40} className="sm:w-12 sm:h-12" />
+              </div>
+              <span className="text-lg sm:text-xl font-bold text-gray-800">Purchases Portal</span>
+            </button>
+          )}
         </div>
       </div>
 

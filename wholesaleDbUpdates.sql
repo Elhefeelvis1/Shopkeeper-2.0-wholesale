@@ -133,3 +133,7 @@ ADD COLUMN IF NOT EXISTS client_wholesale_id VARCHAR(100);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wholesales_client_wholesale_id 
 ON wholesales (client_wholesale_id) 
 WHERE client_wholesale_id IS NOT NULL;
+
+-- 10. Granular Permissions column for users
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{"can_audit": false, "can_purchase": false, "can_discount": false, "can_view_wholesale": true}'::jsonb;

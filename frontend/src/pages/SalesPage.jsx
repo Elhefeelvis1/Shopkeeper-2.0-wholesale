@@ -22,6 +22,9 @@ const SalesPage = () => {
   const { user } = useOutletContext() || {};
   const isSubmittingRef = useRef(false);
 
+  const isAdmin = user?.role === 'administrator';
+  const canDiscount = isAdmin || Boolean(user?.permissions?.can_discount);
+
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -446,30 +449,34 @@ const SalesPage = () => {
                     <span>Subtotal</span>
                     <span className="font-medium">₦{formatMoney(total)}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        placeholder="Disc %"
-                        className="w-full px-3 h-8 bg-white border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 text-sm"
-                        value={discountPercent}
-                        onChange={(e) => { setDiscountPercent(e.target.value); setDiscountValue(''); }}
-                      />
+                  {canDiscount && (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <input
+                          type="number"
+                          placeholder="Disc %"
+                          className="w-full px-3 h-8 bg-white border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 text-sm"
+                          value={discountPercent}
+                          onChange={(e) => { setDiscountPercent(e.target.value); setDiscountValue(''); }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <input
+                          type="number"
+                          placeholder="Disc ₦"
+                          className="w-full px-3 h-8 bg-white border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 text-sm"
+                          value={discountValue}
+                          onChange={(e) => { setDiscountValue(e.target.value); setDiscountPercent(''); }}
+                        />
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        placeholder="Disc ₦"
-                        className="w-full px-3 h-8 bg-white border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 text-sm"
-                        value={discountValue}
-                        onChange={(e) => { setDiscountValue(e.target.value); setDiscountPercent(''); }}
-                      />
+                  )}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-indigo-600">
+                      <span>Discount</span>
+                      <span className="font-medium">-₦{formatMoney(discountAmount)}</span>
                     </div>
-                  </div>
-                  <div className="flex justify-between text-indigo-600">
-                    <span>Discount</span>
-                    <span className="font-medium">-₦{formatMoney(discountAmount)}</span>
-                  </div>
+                  )}
                 </div>
                 <div className="pt-3 border-t border-gray-200 flex justify-between items-center mt-2">
                   <span className="text-lg font-bold text-gray-800">Total</span>

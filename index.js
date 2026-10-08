@@ -70,10 +70,38 @@ const isAuthenticated = (req, res, next) => {
     res.status(401).json({ success: false, message: 'Unauthorized: Please log in to continue.' });
 };
 
+// Check permission helper (Admin always returns true)
+const hasPermission = (user, perm) => {
+    if (!user) return false;
+    if (user.role === 'administrator') return true;
+    if (user.permissions && typeof user.permissions === 'object') {
+        return Boolean(user.permissions[perm]);
+    }
+    return false;
+};
+
 // Requires administrator role
 const isAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user && req.user.role === 'administrator') return next();
     res.status(403).json({ success: false, message: "You don't have permission to access this page. Contact your admin or developer." });
+};
+
+// Requires purchase permission or admin
+const canPurchase = (req, res, next) => {
+    if (req.isAuthenticated() && req.user && hasPermission(req.user, 'can_purchase')) return next();
+    res.status(403).json({ success: false, message: "You don't have permission to access the purchases portal." });
+};
+
+// Requires wholesale permission or admin
+const canWholesale = (req, res, next) => {
+    if (req.isAuthenticated() && req.user && hasPermission(req.user, 'can_view_wholesale')) return next();
+    res.status(403).json({ success: false, message: "You don't have permission to access the wholesale portal." });
+};
+
+// Requires auditor permission or admin
+const canAudit = (req, res, next) => {
+    if (req.isAuthenticated() && req.user && hasPermission(req.user, 'can_audit')) return next();
+    res.status(403).json({ success: false, message: "You don't have permission to access transaction logs or audit history." });
 };
 
 // API ROUTES
@@ -300,7 +328,7 @@ app.get("/api/purchasePage", isAuthenticated, async (req, res) => {
 });
 
 // Get transactions
-app.get("/api/transactionPage", isAdmin, async (req, res) => {
+app.get("/api/transactionPage", canAudit, async (req, res) => {
     try {
         const userData = await db.query('SELECT id, username FROM users');
         res.json({
@@ -1100,7 +1128,7 @@ app.post("/api/process-damaged", isAdmin, async (req, res) => {
 });
 
 // Process Purchase
-app.post("/api/process-purchase", isAuthenticated, async (req, res) => {
+app.post("/api/process-purchase", canPurchase, async (req, res) => {
     const userId = req.user ? req.user.id : 1;
     const client = await db.connect();
     try {
@@ -1119,6 +1147,15 @@ app.post("/api/process-purchase", isAuthenticated, async (req, res) => {
 app.post("/api/process-sale", isAuthenticated, async (req, res) => {
     const userId = req.user ? req.user.id : 1;
     const saleData = req.body;
+
+    const discountVal = parseFloat(saleData.totalDiscount) || 0;
+    if (discountVal > 0 && !hasPermission(req.user, 'can_discount')) {
+        return res.status(403).json({
+            success: false,
+            message: "You do not have permission to apply discounts."
+        });
+    }
+
     try {
         const newSale = await sales.saveSale(userId, saleData, db, res);
         if (newSale && newSale.saleId) {
@@ -1144,9 +1181,18 @@ app.post("/api/process-sale", isAuthenticated, async (req, res) => {
 });
 
 // Save Wholesale
-app.post("/api/process-wholesale", isAuthenticated, async (req, res) => {
+app.post("/api/process-wholesale", canWholesale, async (req, res) => {
     const userId = req.user ? req.user.id : 1;
     const wholesaleData = req.body;
+
+    const discountVal = parseFloat(wholesaleData.totalDiscount) || 0;
+    if (discountVal > 0 && !hasPermission(req.user, 'can_discount')) {
+        return res.status(403).json({
+            success: false,
+            message: "You do not have permission to apply discounts."
+        });
+    }
+
     try {
         const newWholesale = await wholesale.saveWholesale(userId, wholesaleData, db, res);
         if (newWholesale && newWholesale.wholesaleId) {
@@ -1172,8 +1218,9 @@ app.post("/api/process-wholesale", isAuthenticated, async (req, res) => {
 });
 
 // ********Transaction checking
-app.post("/api/searchTransactions", isAdmin, async (req, res) => {
+app.post("/api/searchTransactions", canAudit, async (req, res) => {
     const { startDate, endDate, transactionType, userId } = req.body;
+    const isFullAdmin = req.user && req.user.role === 'administrator';
     try {
         const data = await checkTransaction(startDate, endDate, transactionType, userId, db, res);
         const userData = await db.query('SELECT id, username FROM users');
@@ -1221,9 +1268,9 @@ app.post("/api/searchTransactions", isAdmin, async (req, res) => {
             res.json({
                 success: true,
                 contents: transactionsWithRevenue,
-                totalSalesRevenue: totalSalesRevenue.toFixed(2),
-                totalDiscount: totalDiscount.toFixed(2),
-                payRouteTotals: payRouteTotals,
+                totalSalesRevenue: isFullAdmin ? totalSalesRevenue.toFixed(2) : null,
+                totalDiscount: isFullAdmin ? totalDiscount.toFixed(2) : null,
+                payRouteTotals: isFullAdmin ? payRouteTotals : null,
                 users: userData.rows,
             });
         } else if (!Array.isArray(data)) {
@@ -1239,7 +1286,8 @@ app.post("/api/searchTransactions", isAdmin, async (req, res) => {
 // Search Previous Sales
 app.post("/api/searchSales", isAuthenticated, async (req, res) => {
     const { startDate, endDate, customerId, userId } = req.body;
-    const isAdminUser = req.user && req.user.role === 'administrator';
+    const isFullAdmin = req.user && req.user.role === 'administrator';
+    const canViewAll = isFullAdmin || hasPermission(req.user, 'can_audit');
 
     if (!startDate || !endDate) {
         return res.status(400).json({ success: false, message: 'Start date and end date are required.' });
@@ -1268,8 +1316,8 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
             paramCounter++;
         }
 
-        if (!isAdminUser) {
-            // Non-admin can only view their own sales
+        if (!canViewAll) {
+            // Non-auditor sales rep can only view their own sales
             queryParts.push(`s.user_id = $${paramCounter}`);
             params.push(req.user.id);
             paramCounter++;
@@ -1280,7 +1328,7 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
         }
 
         const whereClause = queryParts.length > 0 ? `WHERE ${queryParts.join(' AND ')}` : '';
-        const limitClause = !isAdminUser ? 'LIMIT 15' : '';
+        const limitClause = !canViewAll ? 'LIMIT 15' : '';
 
         const salesQuery = `
             SELECT 
@@ -1318,7 +1366,7 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
                 ast.name AS product_name,
                 sli.quantity_sold,
                 sli.selling_price_per_unit
-                ${isAdminUser ? ', sli.cost_at_sale' : ''}
+                ${isFullAdmin ? ', sli.cost_at_sale' : ''}
             FROM sale_line_items sli
             JOIN all_stocks ast ON sli.product_id = ast.id
             WHERE sli.sale_id = ANY($1::int[])
@@ -1349,7 +1397,8 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
 // Previous Wholesales
 app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
     const { startDate, endDate, customerId, userId } = req.body;
-    const isAdminUser = req.user && req.user.role === 'administrator';
+    const isFullAdmin = req.user && req.user.role === 'administrator';
+    const canViewAll = isFullAdmin || hasPermission(req.user, 'can_audit');
 
     if (!startDate || !endDate) {
         return res.status(400).json({ success: false, message: 'Start date and end date are required.' });
@@ -1378,8 +1427,8 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
             paramCounter++;
         }
 
-        if (!isAdminUser) {
-            // Non-admin can only view their own wholesales
+        if (!canViewAll) {
+            // Non-auditor sales rep can only view their own wholesales
             queryParts.push(`w.user_id = $${paramCounter}`);
             params.push(req.user.id);
             paramCounter++;
@@ -1390,7 +1439,7 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
         }
 
         const whereClause = queryParts.length > 0 ? `WHERE ${queryParts.join(' AND ')}` : '';
-        const limitClause = !isAdminUser ? 'LIMIT 15' : '';
+        const limitClause = !canViewAll ? 'LIMIT 15' : '';
 
         const wholesaleQuery = `
             SELECT 
@@ -1432,7 +1481,7 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
                 wli.unit_multiplier,
                 wli.total_base_units,
                 wli.selling_price_per_unit
-                ${isAdminUser ? ', wli.cost_at_sale' : ''}
+                ${isFullAdmin ? ', wli.cost_at_sale' : ''}
             FROM wholesale_line_items wli
             JOIN all_stocks ast ON wli.product_id = ast.id
             LEFT JOIN wholesale_units wu ON wli.wholesale_unit_id = wu.id
@@ -1449,14 +1498,14 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
             itemsByWholesaleId[item.wholesale_id].push(item);
         });
 
-        const wholesales = wholesaleResult.rows.map(w => ({
-            ...w,
-            items: itemsByWholesaleId[w.wholesale_id] || []
+        const wholesales = wholesaleResult.rows.map(wholesale => ({
+            ...wholesale,
+            items: itemsByWholesaleId[wholesale.wholesale_id] || []
         }));
 
         res.json({ success: true, wholesales });
     } catch (err) {
-        console.error('Previous wholesales error:', err);
+        console.error(err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -1816,7 +1865,7 @@ app.delete('/api/labels/:type/:id', isAdmin, async (req, res) => {
 
 app.get('/api/users', isAdmin, async (req, res) => {
     try {
-        const result = await db.query('SELECT id, username, role FROM users ORDER BY id ASC');
+        const result = await db.query('SELECT id, username, role, permissions FROM users ORDER BY id ASC');
         res.json({ success: true, users: result.rows });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -1824,10 +1873,10 @@ app.get('/api/users', isAdmin, async (req, res) => {
 });
 
 app.post('/api/users', isAdmin, async (req, res) => {
-    let { username, password, role } = req.body;
+    let { username, password, role, permissions } = req.body;
     if (username) username = username.toLowerCase();
     try {
-        const result = await userAuth.registerUser(username, password, role, db);
+        const result = await userAuth.registerUser(username, password, role, db, permissions);
         if (result === "Already exists") {
             res.status(409).json({ success: false, message: "This username already exists" });
         } else if (result === "error") {
@@ -1842,12 +1891,27 @@ app.post('/api/users', isAdmin, async (req, res) => {
 
 app.put('/api/users/:id', isAdmin, async (req, res) => {
     const targetUserId = parseInt(req.params.id, 10);
-    let { username, role } = req.body;
+    let { username, role, permissions } = req.body;
     if (username) username = username.toLowerCase();
+
+    const defaultPermissions = {
+        can_audit: false,
+        can_purchase: false,
+        can_discount: false,
+        can_view_wholesale: true
+    };
+    const userPermissions = permissions && typeof permissions === 'object'
+        ? JSON.stringify({ ...defaultPermissions, ...permissions })
+        : JSON.stringify(defaultPermissions);
+
     try {
-        const result = await db.query('UPDATE users SET username = $1, role = $2 WHERE id = $3 RETURNING *', [username, role, targetUserId]);
+        const result = await db.query(
+            'UPDATE users SET username = $1, role = $2, permissions = $3 WHERE id = $4 RETURNING *',
+            [username, role, userPermissions, targetUserId]
+        );
         if (result.rowCount > 0) {
-            // Log the user out by destroying their sessions
+            const updatedUser = result.rows[0];
+            // Update active session if user updated themselves or logout others
             const sessions = req.sessionStore.sessions;
             if (sessions) {
                 for (const sessionId in sessions) {
@@ -1859,13 +1923,14 @@ app.put('/api/users/:id', isAdmin, async (req, res) => {
                             } else {
                                 req.session.passport.user.username = username;
                                 req.session.passport.user.role = role;
+                                req.session.passport.user.permissions = updatedUser.permissions;
                                 req.session.save();
                             }
                         }
                     } catch (e) { }
                 }
             }
-            res.json({ success: true, message: 'User updated successfully' });
+            res.json({ success: true, message: 'User updated successfully', user: updatedUser });
         } else {
             res.status(404).json({ success: false, message: 'User not found' });
         }

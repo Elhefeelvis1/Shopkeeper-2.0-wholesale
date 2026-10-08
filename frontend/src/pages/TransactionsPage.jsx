@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Search, Calendar, FileText, Filter, Download } from 'lucide-react';
 
 
 const TransactionsPage = () => {
+  const { user } = useOutletContext() || {};
+  const navigate = useNavigate();
+  const isAdmin = user?.role === 'administrator';
+
   const [users, setUsers] = useState([]);
   const [searchParams, setSearchParams] = useState({
     startDate: '',
@@ -18,6 +23,12 @@ const TransactionsPage = () => {
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
 
+  useEffect(() => {
+    if (user && user.role !== 'administrator' && !user?.permissions?.can_audit) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -31,14 +42,16 @@ const TransactionsPage = () => {
       const res = await axios.post('/api/searchTransactions', paramsToUse);
       if (res.data.success) {
         setResults(res.data.contents || []);
-        const totalRev = parseFloat(res.data.totalSalesRevenue) || 0;
-        const totalDisc = parseFloat(res.data.totalDiscount) || 0;
-        setTotals({
-          totalRevenue: totalRev.toFixed(2),
-          discount: totalDisc.toFixed(2),
-          salesRevenue: (totalRev - totalDisc).toFixed(2),
-          payRouteTotals: res.data.payRouteTotals || {}
-        });
+        if (isAdmin && res.data.totalSalesRevenue !== null) {
+          const totalRev = parseFloat(res.data.totalSalesRevenue) || 0;
+          const totalDisc = parseFloat(res.data.totalDiscount) || 0;
+          setTotals({
+            totalRevenue: totalRev.toFixed(2),
+            discount: totalDisc.toFixed(2),
+            salesRevenue: (totalRev - totalDisc).toFixed(2),
+            payRouteTotals: res.data.payRouteTotals || {}
+          });
+        }
       } else {
         setResults([]);
         setError(res.data.message || 'No transactions found.');
@@ -261,7 +274,7 @@ const TransactionsPage = () => {
           </table>
         </div>
 
-        {results.length > 0 && searchParams.transactionType === 'Sales' && (
+        {isAdmin && results.length > 0 && searchParams.transactionType === 'Sales' && (
           <div className="bg-gray-50 p-6 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex-1 relative group cursor-help">
               <p className="text-sm text-gray-500 font-medium">Total Sales Revenue</p>

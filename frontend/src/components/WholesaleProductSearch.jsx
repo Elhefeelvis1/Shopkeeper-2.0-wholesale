@@ -31,11 +31,11 @@ const WholesaleProductSearch = ({ categories, onAddToCart }) => {
       <div className="bg-white rounded-2xl shadow-sm border border-amber-200/70 p-4 sm:p-6">
         <form onSubmit={handleSearch} className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <h2 className="text-lg font-bold text-amber-950 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-amber-950 flex items-center gap-2 shrink-0">
               <Boxes size={22} className="text-amber-600" /> Wholesale Product Search
             </h2>
             <select
-              className="text-sm w-full sm:w-auto h-9 px-4 bg-amber-50/40 border border-amber-200 rounded-xl focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all text-slate-700 font-medium"
+              className="text-sm w-full sm:w-auto min-w-0 max-w-full sm:max-w-[200px] h-9 px-3 bg-amber-50/40 border border-amber-200 rounded-xl focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all text-slate-700 font-medium truncate"
               value={searchQuery.category}
               onChange={(e) => setSearchQuery({ ...searchQuery, category: e.target.value })}
             >

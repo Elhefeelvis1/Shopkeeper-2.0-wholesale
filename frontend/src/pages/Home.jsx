@@ -9,7 +9,6 @@ const Home = () => {
   const isAdmin = user?.role === 'administrator';
   const perms = user?.permissions || {};
   const canPurchase = isAdmin || Boolean(perms.can_purchase);
-  const canWholesale = isAdmin || Boolean(perms.can_view_wholesale);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] py-6">
@@ -32,7 +31,7 @@ const Home = () => {
             <span className="text-lg sm:text-xl font-bold text-gray-800">Sales Portal</span>
           </button>
 
-          {canWholesale && (
+          {isAdmin && (
             <button
               onClick={() => navigate('/wholesale')}
               className="w-full sm:w-64 flex flex-col items-center gap-4 p-6 sm:p-8 bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg hover:border-teal-100 transition group cursor-pointer"

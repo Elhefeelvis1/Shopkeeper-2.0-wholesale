@@ -53,6 +53,7 @@ export default async function checkTransaction(startDate, endDate, transactionTy
             u.username AS transacted_by,
             CASE
                 WHEN sc.change_type = 'Sales' THEN s.id
+                WHEN sc.change_type = 'Wholesale' THEN w.id
                 ELSE NULL
             END AS sale_id,
             CASE
@@ -60,16 +61,24 @@ export default async function checkTransaction(startDate, endDate, transactionTy
                     SELECT sli.selling_price_per_unit
                     FROM sale_line_items sli
                     WHERE sli.sale_id = sc.sale_id AND sli.product_id = sc.product_id
-                    LIMIT 1 -- We only need one instance of the price for this product in this sale
+                    LIMIT 1
+                )
+                WHEN sc.change_type = 'Wholesale' THEN (
+                    SELECT wli.selling_price_per_unit
+                    FROM wholesale_line_items wli
+                    WHERE wli.wholesale_id = sc.wholesale_id AND wli.product_id = sc.product_id
+                    LIMIT 1
                 )
                 ELSE NULL
             END AS selling_price_per_unit,
             CASE
                 WHEN sc.change_type = 'Sales' THEN s.discount_applied
+                WHEN sc.change_type = 'Wholesale' THEN w.discount_applied
                 ELSE NULL
             END AS sale_discount,
             CASE
                 WHEN sc.change_type = 'Sales' THEN s.pay_route
+                WHEN sc.change_type = 'Wholesale' THEN w.pay_route
                 ELSE NULL
             END AS pay_route
         FROM
@@ -80,6 +89,8 @@ export default async function checkTransaction(startDate, endDate, transactionTy
             users u ON sc.user_id = u.id
         LEFT JOIN
             sales s ON sc.sale_id = s.id AND sc.change_type = 'Sales'
+        LEFT JOIN
+            wholesales w ON sc.wholesale_id = w.id AND sc.change_type = 'Wholesale'
     `;
 
     // --- 3. Append Dynamic WHERE Clause ---
@@ -87,8 +98,8 @@ export default async function checkTransaction(startDate, endDate, transactionTy
         sqlQuery += ` WHERE ${queryParts.join(' AND ')}`;
     }
 
-    // --- 4. Append ORDER BY Clause and Execution ---
-    sqlQuery += ` ORDER BY sc.change_date DESC, sc.id DESC;`; // CORRECTED: Ordering by change_date
+    // --- 4. Append ORDER BY Clause ---
+    sqlQuery += ` ORDER BY sc.change_date DESC, sc.id DESC;`;
 
     try {
         const result = await db.query(sqlQuery, params);

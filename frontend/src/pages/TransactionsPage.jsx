@@ -180,11 +180,13 @@ const TransactionsPage = () => {
             >
               <option value="all">All Types</option>
               <option value="Sales">Sales</option>
+              <option value="Wholesale">Wholesale</option>
               <option value="Return">Return</option>
               <option value="Purchase">Purchase</option>
               <option value="Adjustment">Manual Adjustment</option>
               <option value="Office Use">Office Use</option>
               <option value="Damaged">Damaged</option>
+              <option value="Expired">Expired</option>
             </select>
           </div>
 
@@ -245,11 +247,15 @@ const TransactionsPage = () => {
                   <td className="px-6 py-4 text-gray-600">{new Date(row.transaction_date || row.change_date).toLocaleDateString()}</td>
                   <td className="px-6 py-4 font-medium text-gray-900">{row.product_name || row.name}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${row.change_type === 'Sales' ? 'bg-green-100 text-green-700' :
+                    <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                      row.change_type === 'Sales' ? 'bg-green-100 text-green-700' :
+                      row.change_type === 'Wholesale' ? 'bg-purple-100 text-purple-700' :
                       row.change_type === 'Purchase' ? 'bg-blue-100 text-blue-700' :
-                        row.change_type === 'Return' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-gray-100 text-gray-700'
-                      }`}>
+                      row.change_type === 'Return' ? 'bg-yellow-100 text-yellow-700' :
+                      row.change_type === 'Office Use' ? 'bg-amber-100 text-amber-700' :
+                      row.change_type === 'Damaged' || row.change_type === 'Expired' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
                       {row.change_type}
                     </span>
                   </td>
@@ -274,7 +280,7 @@ const TransactionsPage = () => {
           </table>
         </div>
 
-        {isAdmin && results.length > 0 && searchParams.transactionType === 'Sales' && (
+        {isAdmin && results.length > 0 && (searchParams.transactionType === 'Sales' || searchParams.transactionType === 'Wholesale') && (
           <div className="bg-gray-50 p-6 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex-1 relative group cursor-help">
               <p className="text-sm text-gray-500 font-medium">Total Sales Revenue</p>

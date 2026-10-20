@@ -209,35 +209,38 @@ export async function saveSale(userId, saleData, db, res){
             if (lotIds.length > 0) {
                 await db.query(
                     `UPDATE stock_lots
-                    SET quantity_in_lot = ${caseStatement}
+                    SET quantity_in_lot = ${caseStatement},
+                        is_closed = (CASE WHEN (${caseStatement}) <= 0 THEN TRUE ELSE FALSE END),
+                        last_updated_date = CURRENT_TIMESTAMP
                     WHERE lot_id = ANY($1::int[]);`, // $1 is the array of lot IDs
                     [lotIds] 
                 );
             }
             
-            // Insert into sale_line_items and stock_changes for each lot used
+            // Insert single consolidated line item for this product regardless of how many lots were drawn
+            let totalLineCost = 0;
             for (const soldLot of soldFromLots) {
-                const lineItemCost = soldLot.quantity * soldLot.costPerUnit;
-                const lineItemSellingPrice = soldLot.quantity * sellPrice;
-                // Accumulate the Gross Total before any discount
-                totalSaleAmount += lineItemSellingPrice;
-
-                await db.query(
-                    `INSERT INTO sale_line_items (sale_id, product_id, lot_id, quantity_sold, selling_price_per_unit, cost_at_sale)
-                     VALUES ($1, $2, $3, $4, $5, $6);`,
-                    [saleId, productId, soldLot.lotId, soldLot.quantity, sellPrice, lineItemCost]
-                );
+                totalLineCost += soldLot.quantity * soldLot.costPerUnit;
             }
+            const lineItemSellingPrice = quantity * sellPrice;
+            // Accumulate the Gross Total before any discount
+            totalSaleAmount += lineItemSellingPrice;
+
+            await db.query(
+                `INSERT INTO sale_line_items (sale_id, product_id, lot_id, quantity_sold, selling_price_per_unit, cost_at_sale)
+                 VALUES ($1, $2, $3, $4, $5, $6);`,
+                [saleId, productId, soldFromLots[0]?.lotId || null, quantity, sellPrice, totalLineCost]
+            );
+
             const newQuantity = currentTotalStock - quantity;
-            const lineItemCost = quantity * soldFromLots[0].costPerUnit; // Approximate cost impact using the first lot's cost
             await logStockTransaction(db, {
                 productId: productId,
                 changeAmount: -quantity,
                 oldQty: currentTotalStock,
                 newQty: newQuantity,
                 changeType: 'Sales',
-                costImpact: -lineItemCost, // Negative impact for a sale (cost of goods out)
-                userId: userId ,
+                costImpact: -totalLineCost, // Accurate combined cost of goods out
+                userId: userId,
                 saleId: saleId
             });
         }

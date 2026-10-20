@@ -1227,8 +1227,8 @@ app.post("/api/searchTransactions", canAudit, async (req, res) => {
 
         if (Array.isArray(data) && data.length > 0) {
             const transactionsWithRevenue = data.map(transaction => {
-                if (transaction.change_type === 'Sales') {
-                    const price = parseFloat(transaction.selling_price_per_unit);
+                if (transaction.change_type === 'Sales' || transaction.change_type === 'Wholesale') {
+                    const price = parseFloat(transaction.selling_price_per_unit) || 0;
                     const quantity = Math.abs(transaction.quantity_change);
                     transaction.gross_revenue_impact = (price * quantity).toFixed(2);
                 } else {
@@ -1243,8 +1243,9 @@ app.post("/api/searchTransactions", canAudit, async (req, res) => {
 
             const processedSaleIds = new Set();
             const totalDiscount = transactionsWithRevenue.reduce((acc, curr) => {
-                if (curr.change_type === 'Sales' && curr.sale_id && !processedSaleIds.has(curr.sale_id)) {
-                    processedSaleIds.add(curr.sale_id);
+                const uniqueId = `${curr.change_type}-${curr.sale_id || curr.wholesale_id}`;
+                if ((curr.change_type === 'Sales' || curr.change_type === 'Wholesale') && (curr.sale_id || curr.wholesale_id) && !processedSaleIds.has(uniqueId)) {
+                    processedSaleIds.add(uniqueId);
                     return acc + (parseFloat(curr.sale_discount) || 0);
                 }
                 return acc;
@@ -1252,7 +1253,7 @@ app.post("/api/searchTransactions", canAudit, async (req, res) => {
 
             const payRouteTotals = {};
             transactionsWithRevenue.forEach(transaction => {
-                if (transaction.change_type === 'Sales' && transaction.pay_route) {
+                if ((transaction.change_type === 'Sales' || transaction.change_type === 'Wholesale') && transaction.pay_route) {
                     const impact = parseFloat(transaction.gross_revenue_impact) || 0;
                     if (!payRouteTotals[transaction.pay_route]) {
                         payRouteTotals[transaction.pay_route] = 0;
@@ -1360,17 +1361,18 @@ app.post("/api/searchSales", isAuthenticated, async (req, res) => {
         const saleIds = salesResult.rows.map(r => r.sale_id);
         const lineItemsQuery = `
             SELECT 
-                sli.id AS line_item_id,
+                MIN(sli.id) AS line_item_id,
                 sli.sale_id,
                 sli.product_id,
                 ast.name AS product_name,
-                sli.quantity_sold,
+                SUM(sli.quantity_sold)::int AS quantity_sold,
                 sli.selling_price_per_unit
-                ${isFullAdmin ? ', sli.cost_at_sale' : ''}
+                ${isFullAdmin ? ', SUM(sli.cost_at_sale) AS cost_at_sale' : ''}
             FROM sale_line_items sli
             JOIN all_stocks ast ON sli.product_id = ast.id
             WHERE sli.sale_id = ANY($1::int[])
-            ORDER BY sli.id ASC
+            GROUP BY sli.sale_id, sli.product_id, ast.name, sli.selling_price_per_unit
+            ORDER BY line_item_id ASC
         `;
         const lineItemsResult = await db.query(lineItemsQuery, [saleIds]);
 
@@ -1471,22 +1473,23 @@ app.post("/api/previous-wholesales", isAuthenticated, async (req, res) => {
         const wholesaleIds = wholesaleResult.rows.map(r => r.wholesale_id);
         const lineItemsQuery = `
             SELECT 
-                wli.id AS line_item_id,
+                MIN(wli.id) AS line_item_id,
                 wli.wholesale_id,
                 wli.product_id,
                 ast.name AS product_name,
-                wli.quantity_sold,
+                SUM(wli.quantity_sold) AS quantity_sold,
                 wli.wholesale_unit_id,
                 COALESCE(wu.name, 'Pack') AS wholesale_unit_name,
                 wli.unit_multiplier,
-                wli.total_base_units,
+                SUM(wli.total_base_units) AS total_base_units,
                 wli.selling_price_per_unit
-                ${isFullAdmin ? ', wli.cost_at_sale' : ''}
+                ${isFullAdmin ? ', SUM(wli.cost_at_sale) AS cost_at_sale' : ''}
             FROM wholesale_line_items wli
             JOIN all_stocks ast ON wli.product_id = ast.id
             LEFT JOIN wholesale_units wu ON wli.wholesale_unit_id = wu.id
             WHERE wli.wholesale_id = ANY($1::int[])
-            ORDER BY wli.id ASC
+            GROUP BY wli.wholesale_id, wli.product_id, ast.name, wli.wholesale_unit_id, wu.name, wli.unit_multiplier, wli.selling_price_per_unit
+            ORDER BY line_item_id ASC
         `;
         const lineItemsResult = await db.query(lineItemsQuery, [wholesaleIds]);
 

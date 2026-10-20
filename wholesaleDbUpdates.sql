@@ -137,3 +137,50 @@ WHERE client_wholesale_id IS NOT NULL;
 -- 10. Granular Permissions column for users
 ALTER TABLE users 
 ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{"can_audit": false, "can_purchase": false, "can_discount": false, "can_view_wholesale": true}'::jsonb;
+
+-- 11. Lot Tracking: Mark depleted lots as closed without affecting transaction values
+ALTER TABLE stock_lots 
+ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT FALSE;
+
+UPDATE stock_lots SET is_closed = TRUE WHERE quantity_in_lot <= 0;
+
+-- 12. Consolidate Any Prior Fractional / Multi-lot Line Items Into 1-to-1 Entries
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    -- Consolidate duplicate wholesale_line_items for the same wholesale & product
+    FOR r IN (
+        SELECT wholesale_id, product_id, MIN(id) AS keep_id,
+               ARRAY_AGG(id) AS all_ids,
+               SUM(quantity_sold) AS total_qty,
+               SUM(total_base_units) AS total_base,
+               SUM(cost_at_sale) AS total_cost
+        FROM wholesale_line_items
+        GROUP BY wholesale_id, product_id
+        HAVING COUNT(*) > 1
+    ) LOOP
+        UPDATE wholesale_line_items
+        SET quantity_sold = r.total_qty, total_base_units = r.total_base, cost_at_sale = r.total_cost
+        WHERE id = r.keep_id;
+
+        DELETE FROM wholesale_line_items WHERE id = ANY(r.all_ids) AND id != r.keep_id;
+    END LOOP;
+
+    -- Consolidate duplicate sale_line_items for the same sale & product
+    FOR r IN (
+        SELECT sale_id, product_id, MIN(id) AS keep_id,
+               ARRAY_AGG(id) AS all_ids,
+               SUM(quantity_sold) AS total_qty,
+               SUM(cost_at_sale) AS total_cost
+        FROM sale_line_items
+        GROUP BY sale_id, product_id
+        HAVING COUNT(*) > 1
+    ) LOOP
+        UPDATE sale_line_items
+        SET quantity_sold = r.total_qty, cost_at_sale = r.total_cost
+        WHERE id = r.keep_id;
+
+        DELETE FROM sale_line_items WHERE id = ANY(r.all_ids) AND id != r.keep_id;
+    END LOOP;
+END $$;

@@ -235,7 +235,9 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
             if (lotIds.length > 0) {
                 await db.query(
                     `UPDATE stock_lots
-                     SET quantity_in_lot = ${caseStatement}
+                     SET quantity_in_lot = ${caseStatement},
+                         is_closed = (CASE WHEN (${caseStatement}) <= 0 THEN TRUE ELSE FALSE END),
+                         last_updated_date = CURRENT_TIMESTAMP
                      WHERE lot_id = ANY($1::int[]);`,
                     [lotIds]
                 );
@@ -253,42 +255,39 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
                 }
             }
 
-            // Insert into wholesale_line_items
+            // Calculate total cost across drawn lots
+            let totalLineCost = 0;
             for (const soldLot of soldFromLots) {
-                const proportionOfLot = soldLot.quantity / totalBaseUnitsToSell;
-                const lotPackShare = quantity * proportionOfLot;
-                const lotCost = soldLot.quantity * soldLot.costPerUnit;
-
-                await db.query(
-                    `INSERT INTO wholesale_line_items 
-                     (wholesale_id, product_id, lot_id, quantity_sold, wholesale_unit_id, unit_multiplier, total_base_units, selling_price_per_unit, cost_at_sale)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
-                    [
-                        wholesaleId,
-                        productId,
-                        soldLot.lotId,
-                        lotPackShare,
-                        wholesaleUnitId,
-                        unitMultiplier,
-                        soldLot.quantity,
-                        wholesalePrice,
-                        lotCost
-                    ]
-                );
+                totalLineCost += soldLot.quantity * soldLot.costPerUnit;
             }
+
+            // Insert single consolidated line item for this wholesale product
+            await db.query(
+                `INSERT INTO wholesale_line_items 
+                 (wholesale_id, product_id, lot_id, quantity_sold, wholesale_unit_id, unit_multiplier, total_base_units, selling_price_per_unit, cost_at_sale)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
+                [
+                    wholesaleId,
+                    productId,
+                    soldFromLots[0]?.lotId || null,
+                    quantity,
+                    wholesaleUnitId,
+                    unitMultiplier,
+                    totalBaseUnitsToSell,
+                    wholesalePrice,
+                    totalLineCost
+                ]
+            );
 
             // Log stock transaction for wholesale
             const newQty = currentTotalStock - totalBaseUnitsToSell;
-            const primaryCost = soldFromLots[0]?.costPerUnit || 0;
-            const totalCostImpact = totalBaseUnitsToSell * primaryCost;
-
             await logStockTransaction(db, {
                 productId: productId,
                 changeAmount: -totalBaseUnitsToSell,
                 oldQty: currentTotalStock,
                 newQty: newQty,
                 changeType: 'Wholesale',
-                costImpact: -totalCostImpact,
+                costImpact: -totalLineCost,
                 userId: userId,
                 wholesaleId: wholesaleId
             });

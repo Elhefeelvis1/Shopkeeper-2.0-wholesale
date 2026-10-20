@@ -70,51 +70,78 @@ async function saveReturn(client, userId, data) {
 
 async function removeStock(client, userId, data, type) {
     const items = data.items;
+    if (!Array.isArray(items) || items.length === 0) throw new Error('Items array is required.');
 
     for (const item of items) {
         const { productId, quantity } = item;
-        let remainingToRemove = quantity;
+        const removeQty = Number(quantity);
+        if (removeQty <= 0) continue;
+
+        // Fetch current total stock before removal
+        const stockRes = await client.query('SELECT total_quantity_in_stock FROM all_stocks WHERE id = $1', [productId]);
+        if (stockRes.rows.length === 0) {
+            throw new Error(`Product ${productId} not found.`);
+        }
+        const initialTotal = Number(stockRes.rows[0].total_quantity_in_stock || 0);
+
+        if (initialTotal < removeQty) {
+            throw new Error(`Insufficient stock for product ${productId}. Requested: ${removeQty}, Available: ${initialTotal}`);
+        }
+
+        let remainingToRemove = removeQty;
 
         // Find lots using FEFO (First Expired First Out)
         const lotsRes = await client.query(
             `SELECT lot_id, quantity_in_lot, cost_per_unit FROM stock_lots 
-             WHERE product_id = $1 AND quantity_in_lot > 0 ORDER BY expiry_date ASC`,
+             WHERE product_id = $1 AND quantity_in_lot > 0 ORDER BY expiry_date ASC NULLS LAST, entry_date ASC`,
             [productId]
         );
+
+        let totalCostImpact = 0;
+        const lotUpdates = [];
 
         for (const lot of lotsRes.rows) {
             if (remainingToRemove <= 0) break;
 
-            const take = Math.min(remainingToRemove, lot.quantity_in_lot);
-
-            // Update Lot
-            const upd = await client.query(
-                `UPDATE stock_lots SET quantity_in_lot = quantity_in_lot - $1 
-                 WHERE lot_id = $2 RETURNING quantity_in_lot`,
-                [take, lot.lot_id]
-            );
-
-            // Fetch snapshot for audit log
-            const stockRes = await client.query('SELECT total_quantity_in_stock FROM all_stocks WHERE id = $1', [productId]);
-            const newTotal = stockRes.rows[0].total_quantity_in_stock;
-
-            await logStockTransaction(client, {
-                productId,
-                changeAmount: -take,
-                oldQty: newTotal + take,
-                newQty: newTotal,
-                changeType: type,
-                costImpact: -(take * lot.cost_per_unit),
-                userId,
-                lotId: lot.lot_id
-            });
-
-            remainingToRemove -= take;
+            const take = Math.min(remainingToRemove, Number(lot.quantity_in_lot));
+            if (take > 0) {
+                totalCostImpact += take * (parseFloat(lot.cost_per_unit) || 0);
+                const newLotQty = Number(lot.quantity_in_lot) - take;
+                lotUpdates.push({
+                    lotId: lot.lot_id,
+                    newLotQty,
+                    isClosed: newLotQty <= 0
+                });
+                remainingToRemove -= take;
+            }
         }
 
         if (remainingToRemove > 0) {
-            throw new Error(`Insufficient stock for product ${productId}. Shortfall: ${remainingToRemove}`);
+            throw new Error(`Insufficient stock in active lots for product ${productId}. Shortfall: ${remainingToRemove}`);
         }
+
+        // Deduct quantities from lots, closing them if 0 without splitting transaction
+        for (const lu of lotUpdates) {
+            await client.query(
+                `UPDATE stock_lots 
+                 SET quantity_in_lot = $1, is_closed = $2, last_updated_date = CURRENT_TIMESTAMP 
+                 WHERE lot_id = $3`,
+                [lu.newLotQty, lu.isClosed, lu.lotId]
+            );
+        }
+
+        // Log exactly ONE consolidated stock transaction for this item removal
+        const newTotal = initialTotal - removeQty;
+        await logStockTransaction(client, {
+            productId,
+            changeAmount: -removeQty,
+            oldQty: initialTotal,
+            newQty: newTotal,
+            changeType: type,
+            costImpact: -totalCostImpact,
+            userId,
+            lotId: null
+        });
     }
 }
 

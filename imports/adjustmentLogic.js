@@ -1,6 +1,6 @@
 import logStockTransaction from './updateStockChanges.js';
 
-export default async function adjustment(client, userId, items, adjustmentType) {
+export default async function adjustment(client, userId, items, adjustmentType = "Adjustment") {
     try {
         await client.query('BEGIN');
 

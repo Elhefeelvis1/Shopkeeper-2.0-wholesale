@@ -32,17 +32,25 @@ export default async function savePurchase(userId, purchaseData, db, res) {
             const displayName = itemName || `Product ID: ${productId}`;
 
             // Strict Validation
-            if (quantity <= 0 || unitCost <= 0 || !productId || !expiryDate || String(expiryDate).trim() === '') {
+            if (quantity <= 0 || unitCost <= 0 || !productId) {
                 await db.query('ROLLBACK');
-                return res.status(400).json({ message: `Invalid item data or missing expiry date for ${displayName}` });
+                return res.status(400).json({ message: `Invalid item data for ${displayName}` });
             }
 
-            const eDate = new Date(expiryDate);
-            const currentDate = new Date();
-            currentDate.setHours(0, 0, 0, 0);
-            if (eDate < currentDate) {
-                await db.query('ROLLBACK');
-                return res.status(400).json({ message: `${displayName} has an expiry date in the past.` });
+            let lotExpiry = null;
+            if (expiryDate && String(expiryDate).trim() !== '') {
+                const eDate = new Date(expiryDate);
+                if (isNaN(eDate.getTime())) {
+                    await db.query('ROLLBACK');
+                    return res.status(400).json({ message: `${displayName} has an invalid expiry date.` });
+                }
+                const currentDate = new Date();
+                currentDate.setHours(0, 0, 0, 0);
+                if (eDate < currentDate) {
+                    await db.query('ROLLBACK');
+                    return res.status(400).json({ message: `${displayName} has an expiry date in the past.` });
+                }
+                lotExpiry = expiryDate;
             }
 
             if (parseFloat(unitCost) > parseFloat(unitSellPrice)) {
@@ -65,7 +73,7 @@ export default async function savePurchase(userId, purchaseData, db, res) {
             const lotResult = await db.query(
                 `INSERT INTO stock_lots (product_id, quantity_in_lot, cost_per_unit, expiry_date)
                  VALUES ($1, $2, $3, $4) RETURNING lot_id;`,
-                [productId, quantity, unitCost, expiryDate]
+                [productId, quantity, unitCost, lotExpiry]
             );
             const newLotId = lotResult.rows[0].lot_id;
 

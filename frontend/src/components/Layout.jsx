@@ -5,7 +5,7 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import OfflineQueueModal from './OfflineQueueModal';
 import {
   LayoutDashboard, Package, Users, FileText, LogOut, RefreshCw,
-  Wrench, History, ChevronLeft, ChevronRight, Settings, UserCog, Locate, ChartNoAxesCombined, Home, Menu, X, ClipboardCheck, Wifi, WifiOff, CheckCircle2, Sun, Moon, AlertTriangle
+  Wrench, History, ChevronLeft, ChevronRight, Settings, UserCog, Locate, ChartNoAxesCombined, Home, Menu, X, ClipboardCheck, Wifi, WifiOff, CheckCircle2, Sun, Moon, AlertTriangle, CalendarClock
 } from 'lucide-react';
 
 const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }) => {
@@ -22,6 +22,7 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
     { name: 'Transactions', path: '/transactions', icon: <FileText size={20} /> },
     { name: 'Internal Updates', path: '/internal-updates', icon: <Wrench size={20} /> },
     { name: 'Stock', path: '/stock', icon: <Package size={20} /> },
+    { name: 'Expiry Tracking', path: '/expiry-tracking', icon: <CalendarClock size={20} /> },
     { name: 'Inventory Count', path: '/inventory-count', icon: <ClipboardCheck size={20} /> },
     { name: 'Product Tracker', path: '/tracker', icon: <Locate size={20} /> },
     { name: 'Previous Sales', path: '/previous-sales', icon: <History size={20} /> },
@@ -91,6 +92,7 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen 
             if (item.path === '/purchases') return Boolean(perms.can_purchase);
             if (item.path === '/wholesale') return Boolean(perms.can_view_wholesale);
             if (item.path === '/transactions') return Boolean(perms.can_audit);
+            if (item.path === '/expiry-tracking') return Boolean(perms.can_audit || perms.can_view_wholesale);
             return false;
           }).map((item) => (
             <Link

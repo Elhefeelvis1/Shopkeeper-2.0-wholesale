@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { TrendingUp, Users, DollarSign, Package, Settings, Save, LayoutDashboard, Store, Receipt, Landmark, Tags, Info } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Package, Settings, Save, LayoutDashboard, Store, Receipt, Landmark, Tags, Info, CalendarClock, AlertOctagon, AlertTriangle, ArrowRight } from 'lucide-react';
 import DashboardExpenses from '../components/Dashboard/DashboardExpenses';
 import DashboardBanks from '../components/Dashboard/DashboardBanks';
 import Labels from '../components/Labels';
@@ -112,6 +112,55 @@ const Dashboard = () => {
 
       {activeTab === 'overview' && (
         <>
+          {/* Expiry Alerts Banner */}
+          {data.expiryAlerts && (data.expiryAlerts.expiredCount > 0 || data.expiryAlerts.criticalCount > 0) && (
+            <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs transition ${
+              data.expiryAlerts.expiredCount > 0 
+                ? 'bg-rose-50 border-rose-200 text-rose-900' 
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className={`p-2.5 rounded-xl text-white shrink-0 shadow-xs ${
+                  data.expiryAlerts.expiredCount > 0 ? 'bg-rose-600' : 'bg-amber-500'
+                }`}>
+                  {data.expiryAlerts.expiredCount > 0 ? <AlertOctagon size={22} /> : <CalendarClock size={22} />}
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm sm:text-base tracking-tight">
+                    {data.expiryAlerts.expiredCount > 0 
+                      ? `${data.expiryAlerts.expiredCount} Expired Product Batch${data.expiryAlerts.expiredCount === 1 ? '' : 'es'} Require Attention`
+                      : `${data.expiryAlerts.criticalCount} Product Batch${data.expiryAlerts.criticalCount === 1 ? '' : 'es'} Expiring Soon (≤ 30 Days)`
+                    }
+                  </h4>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
+                    {data.expiryAlerts.expiredCount > 0 && (
+                      <span className="font-semibold text-rose-700 mr-2">
+                        ₦{formatMoney(data.expiryAlerts.expiredValue)} in expired stock.
+                      </span>
+                    )}
+                    {data.expiryAlerts.criticalCount > 0 && (
+                      <span>
+                        {data.expiryAlerts.criticalCount} lots (₦{formatMoney(data.expiryAlerts.criticalValue)}) expire in 30 days.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate('/expiry-tracking')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white shadow-xs transition cursor-pointer shrink-0 w-full sm:w-auto justify-center ${
+                  data.expiryAlerts.expiredCount > 0 
+                    ? 'bg-rose-600 hover:bg-rose-700' 
+                    : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                <span>Manage Expiry</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-4 sm:gap-6">
             {statCards.map((stat, idx) => (

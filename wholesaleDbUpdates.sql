@@ -144,12 +144,12 @@ ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT FALSE;
 
 UPDATE stock_lots SET is_closed = TRUE WHERE quantity_in_lot <= 0;
 
--- 12. Consolidate Any Prior Fractional / Multi-lot Line Items Into 1-to-1 Entries
+-- 12. Consolidate Any Prior Fractional / Multi-lot Transactions & Line Items Into 1-to-1 Entries
 DO $$
 DECLARE
     r RECORD;
 BEGIN
-    -- Consolidate duplicate wholesale_line_items for the same wholesale & product
+    -- A. Consolidate duplicate wholesale_line_items for the same wholesale & product
     FOR r IN (
         SELECT wholesale_id, product_id, MIN(id) AS keep_id,
                ARRAY_AGG(id) AS all_ids,
@@ -167,7 +167,7 @@ BEGIN
         DELETE FROM wholesale_line_items WHERE id = ANY(r.all_ids) AND id != r.keep_id;
     END LOOP;
 
-    -- Consolidate duplicate sale_line_items for the same sale & product
+    -- B. Consolidate duplicate sale_line_items for the same sale & product
     FOR r IN (
         SELECT sale_id, product_id, MIN(id) AS keep_id,
                ARRAY_AGG(id) AS all_ids,
@@ -182,5 +182,35 @@ BEGIN
         WHERE id = r.keep_id;
 
         DELETE FROM sale_line_items WHERE id = ANY(r.all_ids) AND id != r.keep_id;
+    END LOOP;
+
+    -- C. Consolidate internal stock changes (Office Use, Damaged, Expired, Return, Adjustment)
+    -- that were logged across multiple lots in the same operation/minute
+    FOR r IN (
+        SELECT 
+            DATE_TRUNC('minute', change_date) AS change_minute,
+            product_id,
+            change_type,
+            user_id,
+            MIN(id) AS keep_id,
+            ARRAY_AGG(id ORDER BY id ASC) AS all_ids,
+            SUM(quantity_change) AS total_qty_change,
+            SUM(cost_impact) AS total_cost_impact,
+            MIN(new_quantity) AS final_new_qty,
+            MAX(old_quantity) AS initial_old_qty
+        FROM stock_changes
+        WHERE sale_id IS NULL AND wholesale_id IS NULL
+        GROUP BY DATE_TRUNC('minute', change_date), product_id, change_type, user_id
+        HAVING COUNT(*) > 1
+    ) LOOP
+        UPDATE stock_changes
+        SET quantity_change = r.total_qty_change,
+            cost_impact = r.total_cost_impact,
+            new_quantity = r.final_new_qty,
+            old_quantity = r.initial_old_qty,
+            lot_id = NULL
+        WHERE id = r.keep_id;
+
+        DELETE FROM stock_changes WHERE id = ANY(r.all_ids) AND id != r.keep_id;
     END LOOP;
 END $$;

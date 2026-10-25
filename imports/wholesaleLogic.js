@@ -185,7 +185,7 @@ export async function saveWholesale(userId, wholesaleData, db, res) {
                 `SELECT lot_id, quantity_in_lot, cost_per_unit, expiry_date
                  FROM stock_lots
                  WHERE product_id = $1 AND quantity_in_lot > 0
-                 ORDER BY expiry_date ASC, entry_date ASC;`,
+                 ORDER BY expiry_date ASC NULLS LAST, entry_date ASC;`,
                 [productId]
             );
 

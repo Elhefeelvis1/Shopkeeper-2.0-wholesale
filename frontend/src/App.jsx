@@ -18,6 +18,7 @@ import UserSettingsPage from './pages/UserSettingsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ImportCsvPage from './pages/ImportCsvPage';
 import InventoryCountPage from './pages/InventoryCountPage';
+import ExpiryTrackingPage from './pages/ExpiryTrackingPage';
 import { ToastProvider } from './context/ToastContext';
 import { UserProvider } from './context/UserContext';
 
@@ -47,6 +48,7 @@ function AppContent() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/import-csv" element={<ImportCsvPage />} />
             <Route path="/inventory-count" element={<InventoryCountPage />} />
+            <Route path="/expiry-tracking" element={<ExpiryTrackingPage />} />
           </Route>
         </Routes>
       </UserProvider>

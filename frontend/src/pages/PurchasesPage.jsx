@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Trash2, ShoppingCart, Truck } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, Truck, Info } from 'lucide-react';
 import ProductSearch from '../components/ProductSearch';
 
 import { useToast } from '../context/ToastContext';
@@ -103,9 +103,31 @@ const PurchasesPage = () => {
       return;
     }
 
+    // Validate expiry dates: optional, but if supplied must be valid and not in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (const item of cart) {
+      if (item.expiry_date && String(item.expiry_date).trim() !== '') {
+        const itemExp = new Date(item.expiry_date);
+        if (isNaN(itemExp.getTime())) {
+          showToast('error', `${item.item_name || 'Item'} has an invalid expiry date.`);
+          setHighlightedCartRow(item.item_id);
+          return;
+        }
+        if (itemExp < today) {
+          showToast('error', `${item.item_name || 'Item'} has an expiry date in the past.`);
+          setHighlightedCartRow(item.item_id);
+          return;
+        }
+      }
+    }
+
     const payload = {
       supplierId: selectedSupplier,
-      items: cart
+      items: cart.map(item => ({
+        ...item,
+        expiry_date: item.expiry_date && String(item.expiry_date).trim() !== '' ? item.expiry_date : null
+      }))
     };
 
     setIsProcessing(true);
@@ -204,7 +226,16 @@ const PurchasesPage = () => {
                     {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Unit Cost</th>)}
                     {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Sell Price</th>)}
                     {user.role === "administrator" && (<th className="px-4 py-3 font-medium w-32">Wholesale Price</th>)}
-                    <th className="px-4 py-3 font-medium w-40">Exp Date</th>
+                    <th className="px-4 py-3 font-medium w-40">
+                      <div className="inline-flex items-center gap-1 group relative cursor-help">
+                        <span>Exp Date</span>
+                        <Info size={14} className="text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:block z-30 w-52 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl font-normal normal-case pointer-events-none text-center">
+                          Optional. Leave blank for non-perishable goods without an expiration date.
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                        </div>
+                      </div>
+                    </th>
                     {user.role === "administrator" && <th className="px-4 py-3 font-medium text-right">Total</th>}
                     <th className="px-4 py-3 font-medium text-center w-16">Act</th>
                   </tr>
@@ -253,6 +284,7 @@ const PurchasesPage = () => {
                           type="date"
                           value={item.expiry_date || ''}
                           onChange={(e) => updateCartItem(item.item_id, 'expiry_date', e.target.value)}
+                          title="Optional: Leave blank for non-perishable goods"
                           className="w-full px-2 py-1 border rounded bg-white text-gray-800 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                         />
                       </td>

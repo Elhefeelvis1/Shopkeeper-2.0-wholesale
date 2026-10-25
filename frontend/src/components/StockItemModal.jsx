@@ -217,8 +217,9 @@ const StockItemModal = ({
               <div className="group">
                 <input
                   type="number"
-                  required
-                  placeholder="e.g. 10"
+                  min="0"
+                  step="1"
+                  placeholder="0 (optional, default: 0)"
                   className="w-full px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-100 focus:border-indigo-600 outline-none transition-colors duration-200 text-slate-800 placeholder-slate-400 text-sm font-medium"
                   value={formData.reorderLevel}
                   onChange={e => setFormData({ ...formData, reorderLevel: e.target.value })}

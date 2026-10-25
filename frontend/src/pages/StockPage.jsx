@@ -203,8 +203,17 @@ const StockPage = () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
+      const sanitizedReorderLevel = formData.reorderLevel !== '' && formData.reorderLevel !== null && !isNaN(formData.reorderLevel)
+        ? Math.max(0, Number(formData.reorderLevel))
+        : 0;
+
+      const submissionData = {
+        ...formData,
+        reorderLevel: sanitizedReorderLevel
+      };
+
       if (ItemOnEdit) {
-        const response = await axios.put('/api/update-item', { id: ItemOnEdit.id, ...formData });
+        const response = await axios.put('/api/update-item', { id: ItemOnEdit.id, ...submissionData });
         
         setInventory(prev => prev.map(item => {
           if (item.id === ItemOnEdit.id) {
@@ -218,7 +227,7 @@ const StockPage = () => {
               unit: formData.unit,
               last_cost_price: formData.cost,
               unit_selling_price: formData.price,
-              reorder_level: formData.reorderLevel,
+              reorder_level: sanitizedReorderLevel,
               description: formData.description,
               total_quantity_in_stock: formData.quantity !== '' ? Number(formData.quantity) : item.total_quantity_in_stock,
               wholesale_price: formData.wholesalePrice,
@@ -231,7 +240,7 @@ const StockPage = () => {
 
         showToast('success', response.data.message || 'Product updated successfully!');
       } else {
-        const response = await axios.post('/api/addStock', formData);
+        const response = await axios.post('/api/addStock', submissionData);
         const createdId = response.data?.item?.id || response.data?.id || Date.now();
 
         const newItem = {
@@ -244,7 +253,7 @@ const StockPage = () => {
           unit: formData.unit,
           last_cost_price: formData.cost,
           unit_selling_price: formData.price,
-          reorder_level: formData.reorderLevel,
+          reorder_level: sanitizedReorderLevel,
           description: formData.description,
           total_quantity_in_stock: Number(formData.quantity) || 0,
           wholesale_price: formData.wholesalePrice,
@@ -418,8 +427,12 @@ const StockPage = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {item.total_quantity_in_stock <= item.reorder_level ? (
-                        <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 px-2.5 py-1 rounded-full text-xs font-medium border border-red-100">
+                      {item.total_quantity_in_stock <= 0 ? (
+                        <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-1 rounded-full text-xs font-semibold border border-red-200">
+                          <AlertOctagon size={12} /> Out of Stock
+                        </span>
+                      ) : item.total_quantity_in_stock <= item.reorder_level ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full text-xs font-medium border border-amber-200">
                           <AlertTriangle size={12} /> Low Stock
                         </span>
                       ) : (

@@ -34,6 +34,8 @@ import * as dashboardData from './imports/dashboardData.js';
 import adjustment from './imports/adjustmentLogic.js';
 // Importing csv import logic
 import * as csvImport from './imports/csvImport.js';
+// Importing expiry tracking logic
+import * as expiryTracking from './imports/expiryTracking.js';
 
 const app = express();
 const port = 3000;
@@ -280,13 +282,15 @@ app.get("/api/dashboard", isAdmin, async (req, res) => {
         const salesData = await db.query("SELECT ast.name, change_type, quantity_change, unit_selling_price, last_cost_price FROM stock_changes AS sc JOIN all_stocks AS ast ON sc.product_id = ast.id WHERE sc.change_type = 'Sales' ORDER BY change_date DESC LIMIT 15");
         const stockValueResult = await db.query("SELECT COALESCE(SUM(total_quantity_in_stock * last_cost_price), 0) AS total_stock_value, COALESCE(SUM(total_quantity_in_stock * unit_selling_price), 0) AS total_stock_sell_value FROM all_stocks");
         const customersCount = await db.query("SELECT COUNT(*) FROM customers");
+        const expiryAlerts = await expiryTracking.getExpiryAlertSummary(db);
 
         res.json({
             users: allUsers.rows,
             recentSales: salesData.rows,
             totalStockValue: stockValueResult.rows[0].total_stock_value,
             totalStockSellValue: stockValueResult.rows[0].total_stock_sell_value,
-            totalCustomers: parseInt(customersCount.rows[0].count)
+            totalCustomers: parseInt(customersCount.rows[0].count),
+            expiryAlerts
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -802,9 +806,9 @@ app.get("/api/all-inventory", isAdmin, async (req, res) => {
         }
 
         if (filter === 'reorder') {
-            whereConditions.push(`ast.total_quantity_in_stock <= ast.reorder_level AND ast.total_quantity_in_stock > 0`);
+            whereConditions.push(`ast.total_quantity_in_stock <= ast.reorder_level`);
         } else if (filter === 'zero') {
-            whereConditions.push(`ast.total_quantity_in_stock = 0`);
+            whereConditions.push(`ast.total_quantity_in_stock <= 0`);
         }
 
         let whereClause = whereConditions.length > 0 ? "WHERE " + whereConditions.join(" AND ") : "";
@@ -965,7 +969,12 @@ app.post("/api/addStock", isAdmin, async (req, res) => {
                 current_qty: 0,
                 last_cost_price: cost || 0
             }];
-            await adjustment(db, userId, items);
+            const client = await db.connect();
+            try {
+                await adjustment(client, userId, items, "Adjustment");
+            } finally {
+                client.release();
+            }
         }
 
         res.json({ success: true, message: 'Product saved successfully!', item: newItem });
@@ -1097,6 +1106,65 @@ app.post("/api/process-expired", isAdmin, async (req, res) => {
         await client.query('ROLLBACK');
         res.status(500).json({ success: false, message: err.message });
     } finally { client.release(); }
+});
+
+// Expiry Tracking Routes
+app.get("/api/expiry-tracking", isAuthenticated, async (req, res) => {
+    try {
+        const data = await expiryTracking.getExpiryData(req.query, db);
+        res.json({ success: true, ...data });
+    } catch (err) {
+        console.error("Error in /api/expiry-tracking:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.post("/api/expiry/write-off", isAdmin, async (req, res) => {
+    const userId = req.user ? req.user.id : 1;
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        await expiryTracking.writeOffLots(client, userId, req.body.items);
+        await client.query('COMMIT');
+        res.status(200).json({ success: true, message: "Expired stock written off successfully!" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Error in /api/expiry/write-off:", err);
+        res.status(500).json({ success: false, message: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.patch("/api/expiry/lot/:lotId", canPurchase, async (req, res) => {
+    try {
+        const { lotId } = req.params;
+        const { expiryDate } = req.body;
+        const updated = await expiryTracking.updateLotExpiryDate(db, lotId, expiryDate);
+        res.json({
+            success: true,
+            message: `Expiry date updated successfully for LOT #${lotId}`,
+            lot: updated
+        });
+    } catch (err) {
+        console.error("Error updating lot expiry date:", err);
+        res.status(400).json({ success: false, message: err.message });
+    }
+});
+
+app.post("/api/expiry/update-date", canPurchase, async (req, res) => {
+    try {
+        const { lotId, expiryDate } = req.body;
+        const updated = await expiryTracking.updateLotExpiryDate(db, lotId, expiryDate);
+        res.json({
+            success: true,
+            message: `Expiry date updated successfully for LOT #${lotId}`,
+            lot: updated
+        });
+    } catch (err) {
+        console.error("Error updating lot expiry date:", err);
+        res.status(400).json({ success: false, message: err.message });
+    }
 });
 
 app.post("/api/process-office-use", isAdmin, async (req, res) => {
